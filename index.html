@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1f17">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Bet Tracker">
+<title>Bet Tracker</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --felt:#0f1f17; --felt-2:#162b20; --felt-3:#1e3a2b;
+    --slip:#f4efe3; --slip-2:#e9e2d0; --ink:#1b1b1b; --muted:#7c7566;
+    --gold:#e3b341; --win:#2fbf71; --loss:#e5484d; --pending:#8fa3b8;
+    --line:rgba(255,255,255,.08);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--felt);color:#eef3ee;font-family:Inter,system-ui,sans-serif}
+  body{min-height:100vh;padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+  .wrap{max-width:640px;margin:0 auto;padding:16px}
+  header{display:flex;align-items:center;justify-content:space-between;padding-top:calc(8px + env(safe-area-inset-top))}
+  .brand{font-family:'Archivo Black',sans-serif;font-size:22px;letter-spacing:.5px;text-transform:uppercase}
+  .brand span{color:var(--gold)}
+  .season{font-size:12px;color:#9fb3a6;background:var(--felt-2);border:1px solid var(--line);padding:6px 10px;border-radius:999px;cursor:pointer}
+  .mono{font-family:'JetBrains Mono',monospace}
+
+  /* hero */
+  .hero{margin-top:16px;border-radius:20px;padding:22px 20px;background:linear-gradient(160deg,var(--felt-3),var(--felt-2));border:1px solid var(--line);position:relative;overflow:hidden}
+  .hero .label{font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:#9fb3a6}
+  .hero .big{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:44px;margin:6px 0 2px;line-height:1.05}
+  .hero .sub{font-size:14px;color:#c7d4cb}
+  .up{color:var(--win)} .down{color:var(--loss)} .flat{color:#eef3ee}
+  .badge{display:inline-block;margin-top:10px;font-size:12px;font-weight:700;padding:5px 10px;border-radius:999px}
+  .badge.up{background:rgba(47,191,113,.15)} .badge.down{background:rgba(229,72,77,.15)} .badge.flat{background:rgba(255,255,255,.08)}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+  .stat{background:var(--felt-2);border:1px solid var(--line);border-radius:14px;padding:14px}
+  .stat .k{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#9fb3a6}
+  .stat .v{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:20px;margin-top:4px}
+
+  .card{background:var(--felt-2);border:1px solid var(--line);border-radius:16px;padding:16px;margin-top:12px}
+  .card h3{margin:0 0 10px;font-size:13px;letter-spacing:1px;text-transform:uppercase;color:#9fb3a6;font-weight:600}
+  .chart svg{width:100%;height:auto;display:block}
+  .empty-chart{color:#9fb3a6;font-size:14px;padding:18px 0;text-align:center}
+
+  /* bet slips */
+  .filters{display:flex;gap:8px;margin-top:14px;overflow-x:auto;padding-bottom:2px}
+  .chip{flex:none;border:1px solid var(--line);background:var(--felt-2);color:#c7d4cb;padding:8px 14px;border-radius:999px;font-size:13px;font-weight:600;cursor:pointer}
+  .chip.on{background:var(--gold);color:#1b1b1b;border-color:var(--gold)}
+  .month{font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:#9fb3a6;margin:20px 4px 8px;display:flex;justify-content:space-between}
+  .slip{background:var(--slip);color:var(--ink);border-radius:12px;padding:14px 14px 12px;margin-bottom:10px;position:relative;border-left:6px solid var(--pending)}
+  .slip.won{border-left-color:var(--win)} .slip.lost{border-left-color:var(--loss)} .slip.void{border-left-color:#b9b2a2}
+  .slip .top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+  .slip .desc{font-weight:600;font-size:15px;line-height:1.3;word-break:break-word}
+  .slip .meta{font-size:12px;color:var(--muted);margin-top:4px}
+  .slip .pl{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:16px;white-space:nowrap}
+  .slip .pl.up{color:#1e9a59} .slip .pl.down{color:#c8343a} .slip .pl.flat{color:var(--muted)}
+  .slip .row{display:flex;gap:8px;margin-top:12px;border-top:1px dashed #cfc6b2;padding-top:10px}
+  .btn{border:0;border-radius:10px;padding:10px 12px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit}
+  .btn.win{background:var(--win);color:#fff;flex:1}
+  .btn.loss{background:var(--loss);color:#fff;flex:1}
+  .btn.ghost{background:transparent;color:var(--muted);border:1px solid #cfc6b2}
+  .status-tag{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:3px 8px;border-radius:6px;background:var(--slip-2);color:var(--muted)}
+  .status-tag.won{background:#d6f3e3;color:#1e9a59} .status-tag.lost{background:#fadcdd;color:#c8343a}
+  .empty{text-align:center;color:#9fb3a6;padding:40px 10px;font-size:15px}
+
+  /* nav + fab */
+  nav{position:fixed;left:0;right:0;bottom:0;background:rgba(15,31,23,.96);backdrop-filter:blur(8px);border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom);z-index:5}
+  nav .in{max-width:640px;width:100%;display:flex}
+  nav button{flex:1;background:none;border:0;color:#9fb3a6;padding:14px 0 16px;font-family:inherit;font-weight:600;font-size:13px;cursor:pointer}
+  nav button.on{color:var(--gold)}
+  .fab{position:fixed;right:max(16px,calc(50% - 304px));bottom:calc(76px + env(safe-area-inset-bottom));background:var(--gold);color:#1b1b1b;border:0;border-radius:999px;padding:15px 20px;font-weight:800;font-size:15px;box-shadow:0 8px 24px rgba(0,0,0,.4);cursor:pointer;z-index:6;font-family:inherit}
+
+  /* modal */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center;z-index:20}
+  .sheet{background:var(--slip);color:var(--ink);width:100%;max-width:640px;border-radius:20px 20px 0 0;padding:20px 18px calc(22px + env(safe-area-inset-bottom));max-height:90vh;overflow-y:auto}
+  @media(min-width:560px){.overlay{align-items:center}.sheet{border-radius:20px}}
+  .sheet h2{margin:0 0 14px;font-family:'Archivo Black',sans-serif;font-size:20px;text-transform:uppercase}
+  .field{margin-bottom:12px}
+  .field label{display:block;font-size:12px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+  .field input,.field textarea,.field select{width:100%;padding:12px;border-radius:10px;border:1px solid #cfc6b2;background:#fffdf7;font-size:16px;font-family:inherit;color:var(--ink)}
+  .field textarea{min-height:70px;resize:vertical}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .hint{font-size:12px;color:var(--muted);margin-top:4px}
+  .seg{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+  .seg button{padding:10px 4px;border-radius:10px;border:1px solid #cfc6b2;background:#fffdf7;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;color:var(--ink)}
+  .seg button.on.pending{background:var(--pending);color:#fff;border-color:var(--pending)}
+  .seg button.on.won{background:var(--win);color:#fff;border-color:var(--win)}
+  .seg button.on.lost{background:var(--loss);color:#fff;border-color:var(--loss)}
+  .seg button.on.void{background:#8a8372;color:#fff;border-color:#8a8372}
+  .actions{display:flex;gap:10px;margin-top:16px}
+  .actions .btn{flex:1;padding:14px}
+  .btn.primary{background:var(--felt);color:#fff}
+  .btn.danger{background:transparent;color:#c8343a;border:1px solid #e9b8ba}
+  .settings-list .btn{width:100%;margin-bottom:10px;padding:14px;text-align:left}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">Bet<span>Tracker</span></div>
+    <div class="season" id="seasonBtn">⚙︎ Season</div>
+  </header>
+  <main id="view"></main>
+</div>
+
+<button class="fab" id="fab">+ Log bet</button>
+<nav><div class="in">
+  <button data-tab="dashboard" class="on">Dashboard</button>
+  <button data-tab="bets">Bets</button>
+</div></nav>
+<div id="modal"></div>
+<input type="file" id="importFile" accept=".json,application/json" hidden>
+
+<script>
+(function(){
+  const KEY='bet-tracker-state-v1';
+  const CUR='£';
+  let state={seasonName:'2026/27 Season',bets:[]};
+  let tab='dashboard', filter='all';
+
+  try{const s=localStorage.getItem(KEY); if(s) state=Object.assign(state,JSON.parse(s));}catch(e){}
+  function save(){try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}}
+
+  const $=s=>document.querySelector(s);
+  const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const today=()=>{const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10);};
+  const money=n=>CUR+Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  const signed=n=>(n>0.004?'+':n<-0.004?'−':'')+money(n);
+  const cls=n=>n>0.004?'up':n<-0.004?'down':'flat';
+  const fmtDate=d=>new Date(d+'T00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+
+  // Profit/loss for a single bet
+  function pl(b){
+    if(b.status==='won') return (+b.returns||0)-(+b.stake||0);
+    if(b.status==='lost') return -(+b.stake||0);
+    return 0;
+  }
+  function stats(){
+    const settled=state.bets.filter(b=>b.status==='won'||b.status==='lost');
+    const won=settled.filter(b=>b.status==='won');
+    const staked=settled.reduce((a,b)=>a+(+b.stake||0),0);
+    const returned=won.reduce((a,b)=>a+(+b.returns||0),0);
+    const net=settled.reduce((a,b)=>a+pl(b),0);
+    const pend=state.bets.filter(b=>b.status==='pending');
+    const best=won.reduce((m,b)=>Math.max(m,pl(b)),0);
+    return {settled,won:won.length,lost:settled.length-won.length,staked,returned,net,
+      pendingCount:pend.length,pendingStake:pend.reduce((a,b)=>a+(+b.stake||0),0),
+      winRate:settled.length?won.length/settled.length*100:0,
+      roi:staked?net/staked*100:0,best};
+  }
+  const sorted=()=>[...state.bets].sort((a,b)=>b.date.localeCompare(a.date)||b.created-a.created);
+
+  function render(){
+    document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
+    $('#seasonBtn').textContent='⚙︎ '+state.seasonName;
+    $('#view').innerHTML=tab==='dashboard'?dashboard():betsView();
+    bindSlips();
+    document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{filter=c.dataset.f;render();});
+  }
+
+  function dashboard(){
+    const s=stats();
+    const c=cls(s.net);
+    const word=c==='up'?'In profit':c==='down'?'Down':'Breaking even';
+    return `
+      <section class="hero">
+        <div class="label">Season profit / loss</div>
+        <div class="big ${c}">${signed(s.net)}</div>
+        <div class="sub">${s.won}W – ${s.lost}L · ${s.settled.length} settled${s.pendingCount?` · ${s.pendingCount} pending`:''}</div>
+        <div class="badge ${c}">${word}${s.staked?` · ROI ${s.roi>=0?'+':''}${s.roi.toFixed(1)}%`:''}</div>
+      </section>
+      <div class="grid">
+        <div class="stat"><div class="k">Total staked</div><div class="v">${money(s.staked)}</div></div>
+        <div class="stat"><div class="k">Total returned</div><div class="v">${money(s.returned)}</div></div>
+        <div class="stat"><div class="k">Win rate</div><div class="v">${s.winRate.toFixed(0)}%</div></div>
+        <div class="stat"><div class="k">Pending stake</div><div class="v">${money(s.pendingStake)}</div></div>
+      </div>
+      <div class="card chart"><h3>Running profit / loss</h3>${chart()}</div>
+      <div class="card"><h3>Recent bets</h3>${
+        sorted().slice(0,4).map(slip).join('')||'<div class="empty-chart">No bets yet — tap “Log bet” to add your first.</div>'
+      }</div>`;
+  }
+
+  function chart(){
+    const pts=state.bets.filter(b=>b.status==='won'||b.status==='lost')
+      .sort((a,b)=>a.date.localeCompare(b.date)||a.created-b.created);
+    if(pts.length<1) return '<div class="empty-chart">Settle a bet to start the graph.</div>';
+    let run=0; const ys=[0,...pts.map(b=>run+=pl(b))];
+    const W=600,H=200,P=14;
+    const mn=Math.min(0,...ys),mx=Math.max(0,...ys),rng=(mx-mn)||1;
+    const x=i=>P+i*(W-2*P)/(ys.length-1||1);
+    const y=v=>P+(mx-v)*(H-2*P)/rng;
+    const line=ys.map((v,i)=>`${i?'L':'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    const last=ys[ys.length-1], col=last>=0?'var(--win)':'var(--loss)';
+    const area=`${line} L${x(ys.length-1)},${y(0)} L${x(0)},${y(0)} Z`;
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      <line x1="${P}" x2="${W-P}" y1="${y(0)}" y2="${y(0)}" stroke="rgba(255,255,255,.25)" stroke-dasharray="4 5"/>
+      <path d="${area}" fill="${col}" opacity=".12"/>
+      <path d="${line}" fill="none" stroke="${col}" stroke-width="3" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+      <circle cx="${x(ys.length-1)}" cy="${y(last)}" r="5" fill="${col}"/>
+    </svg>
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:#9fb3a6;margin-top:6px">
+      <span>${fmtDate(pts[0].date)}</span><span>${fmtDate(pts[pts.length-1].date)}</span></div>`;
+  }
+
+  function betsView(){
+    const fs=[['all','All'],['pending','Pending'],['won','Won'],['lost','Lost']];
+    let list=sorted(); if(filter!=='all') list=list.filter(b=>b.status===filter);
+    let html=`<div class="filters">${fs.map(([k,l])=>`<button class="chip ${filter===k?'on':''}" data-f="${k}">${l} (${k==='all'?state.bets.length:state.bets.filter(b=>b.status===k).length})</button>`).join('')}</div>`;
+    if(!list.length) return html+'<div class="empty">Nothing here yet.</div>';
+    const groups={};
+    list.forEach(b=>{const k=b.date.slice(0,7);(groups[k]=groups[k]||[]).push(b);});
+    Object.keys(groups).forEach(k=>{
+      const net=groups[k].reduce((a,b)=>a+pl(b),0);
+      const label=new Date(k+'-01T00:00').toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+      html+=`<div class="month"><span>${label}</span><span class="mono ${cls(net)}">${signed(net)}</span></div>`;
+      html+=groups[k].map(slip).join('');
+    });
+    return html;
+  }
+
+  function slip(b){
+    const p=pl(b);
+    const tag={pending:'Pending',won:'Won',lost:'Lost',void:'Void'}[b.status];
+    return `<div class="slip ${b.status}" data-id="${b.id}">
+      <div class="top">
+        <div style="min-width:0">
+          <div class="desc">${esc(b.description)||'<span style="color:#7c7566">No description</span>'}</div>
+          <div class="meta">${fmtDate(b.date)} · Stake ${money(+b.stake||0)}${b.odds?` · Odds ${esc(b.odds)}`:''}${b.status==='won'?` · Returned ${money(+b.returns||0)}`:''}</div>
+        </div>
+        <div style="text-align:right">
+          ${b.status==='pending'?`<span class="status-tag">${tag}</span>`:`<div class="pl ${cls(p)}">${b.status==='void'?'Void':signed(p)}</div>`}
+        </div>
+      </div>
+      ${b.status==='pending'?`<div class="row">
+        <button class="btn win" data-act="win">✓ Won</button>
+        <button class="btn loss" data-act="loss">✕ Lost</button>
+        <button class="btn ghost" data-act="edit">Edit</button></div>`:''}
+    </div>`;
+  }
+
+  function bindSlips(){
+    document.querySelectorAll('.slip').forEach(el=>{
+      const b=state.bets.find(x=>x.id===el.dataset.id);
+      el.addEventListener('click',e=>{
+        const act=e.target.dataset.act;
+        if(act==='loss'){b.status='lost';save();render();}
+        else if(act==='win'){openForm(b,'won');}
+        else openForm(b);
+      });
+    });
+  }
+
+  // decimal odds: "2.5" ; fractional: "6/4"
+  function oddsToDecimal(o){
+    if(!o) return null; o=String(o).trim();
+    if(o.includes('/')){const [a,c]=o.split('/').map(Number);return c?a/c+1:null;}
+    const n=Number(o); return n>1?n:null;
+  }
+
+  function openForm(bet,forceStatus){
+    const isNew=!bet;
+    const b=bet?{...bet}:{id:uid(),created:Date.now(),date:today(),stake:'',description:'',odds:'',status:'pending',returns:''};
+    if(forceStatus) b.status=forceStatus;
+    let retTouched=!!b.returns;
+    const suggest=()=>{const dec=oddsToDecimal(b.odds);return dec&&+b.stake?(b.stake*dec).toFixed(2):'';};
+    const retHtml=()=>{
+      if(b.status!=='won') return '';
+      const sg=suggest(); const val=retTouched?b.returns:(b.returns||sg);
+      return `<div class="field"><label>Total return (${CUR}, incl. stake)</label>
+          <input type="number" inputmode="decimal" step="0.01" min="0" id="f-ret" value="${val}">
+          <div class="hint" id="retHint">${sg?`From odds: ${CUR}${sg}`:'What the bookie paid out, including your stake back.'}</div></div>`;
+    };
+    const draw=()=>{
+      $('#modal').innerHTML=`<div class="overlay" id="ov"><div class="sheet">
+        <h2>${isNew?'Log a bet':'Edit bet'}</h2>
+        <div class="field"><label>Description</label>
+          <textarea id="f-desc" placeholder="e.g. Arsenal to win + BTTS">${esc(b.description)}</textarea></div>
+        <div class="two">
+          <div class="field"><label>Date</label><input type="date" id="f-date" value="${b.date}"></div>
+          <div class="field"><label>Stake (${CUR})</label><input type="number" inputmode="decimal" step="0.01" min="0" id="f-stake" value="${b.stake}"></div>
+        </div>
+        <div class="field"><label>Odds <span style="text-transform:none;letter-spacing:0;font-weight:500">(optional)</span></label>
+          <input id="f-odds" placeholder="e.g. 6/4 or 2.5" value="${esc(b.odds)}">
+          <div class="hint">Used to fill in the return when it wins.</div></div>
+        <div class="field"><label>Result</label><div class="seg">
+          ${['pending','won','lost','void'].map(s=>`<button type="button" data-s="${s}" class="${s} ${b.status===s?'on':''}">${s[0].toUpperCase()+s.slice(1)}</button>`).join('')}
+        </div></div>
+        <div id="retWrap">${retHtml()}</div>
+        <div class="actions">
+          ${isNew?'':'<button class="btn danger" id="del">Delete</button>'}
+          <button class="btn ghost" id="cancel">Cancel</button>
+          <button class="btn primary" id="saveBtn">Save</button>
+        </div></div></div>`;
+      const grab=()=>{b.description=$('#f-desc').value.trim();b.date=$('#f-date').value||today();
+        b.stake=$('#f-stake').value;b.odds=$('#f-odds').value.trim();if($('#f-ret'))b.returns=$('#f-ret').value;};
+      document.querySelectorAll('.seg button').forEach(x=>x.onclick=()=>{grab();b.status=x.dataset.s;draw();});
+      const bindRet=()=>{if($('#f-ret'))$('#f-ret').oninput=()=>{retTouched=true;};};
+      bindRet();
+      // Update only the return field when odds/stake change, so taps on Save aren't lost to a redraw
+      $('#f-odds').oninput=$('#f-stake').oninput=()=>{
+        b.stake=$('#f-stake').value;b.odds=$('#f-odds').value.trim();
+        if(b.status==='won'&&!retTouched){b.returns='';$('#retWrap').innerHTML=retHtml();bindRet();}
+      };
+      $('#cancel').onclick=close;
+      $('#ov').onclick=e=>{if(e.target.id==='ov')close();};
+      if($('#del')) $('#del').onclick=()=>{if(confirm('Delete this bet? This can’t be undone.')){state.bets=state.bets.filter(x=>x.id!==b.id);save();close();}};
+      $('#saveBtn').onclick=()=>{
+        grab();
+        if(!(+b.stake>0)){alert('Enter a stake.');return;}
+        if(b.status==='won'&&!(+b.returns>0)){alert('Enter the total return for the win.');return;}
+        if(b.status!=='won') b.returns='';
+        b.stake=+(+b.stake).toFixed(2); if(b.returns!=='') b.returns=+(+b.returns).toFixed(2);
+        const i=state.bets.findIndex(x=>x.id===b.id);
+        if(i>=0) state.bets[i]=b; else state.bets.push(b);
+        save();close();
+      };
+    };
+    draw();
+    if(isNew) setTimeout(()=>$('#f-desc')?.focus(),50);
+  }
+  function close(){$('#modal').innerHTML='';render();}
+
+  function openSettings(){
+    $('#modal').innerHTML=`<div class="overlay" id="ov"><div class="sheet settings-list">
+      <h2>Season</h2>
+      <div class="field"><label>Season name</label><input id="s-name" value="${esc(state.seasonName)}"></div>
+      <button class="btn ghost" id="exp">⬇︎ Back up data (JSON)</button>
+      <button class="btn ghost" id="csv">⬇︎ Export to spreadsheet (CSV)</button>
+      <button class="btn ghost" id="imp">⬆︎ Restore from backup</button>
+      <button class="btn danger" id="reset">Start a new season (clear all bets)</button>
+      <div class="actions"><button class="btn primary" id="done">Done</button></div>
+    </div></div>`;
+    const dl=(name,txt,type)=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type}));a.download=name;a.click();};
+    $('#exp').onclick=()=>dl('bet-tracker-backup-'+today()+'.json',JSON.stringify(state,null,2),'application/json');
+    $('#csv').onclick=()=>{
+      const rows=[['Date','Description','Stake','Odds','Result','Return','Profit/Loss']];
+      sorted().reverse().forEach(b=>rows.push([b.date,b.description,b.stake,b.odds,b.status,b.returns,pl(b).toFixed(2)]));
+      dl('bets-'+today()+'.csv',rows.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\n'),'text/csv');
+    };
+    $('#imp').onclick=()=>$('#importFile').click();
+    $('#reset').onclick=()=>{
+      if(confirm('Clear every bet and start fresh? Back up first if you want to keep this season.')){
+        state.bets=[];save();close();}
+    };
+    $('#done').onclick=()=>{state.seasonName=$('#s-name').value.trim()||'Season';save();close();};
+    $('#ov').onclick=e=>{if(e.target.id==='ov'){state.seasonName=$('#s-name').value.trim()||'Season';save();close();}};
+  }
+  $('#importFile').onchange=e=>{
+    const f=e.target.files[0]; if(!f) return;
+    const r=new FileReader();
+    r.onload=()=>{try{const d=JSON.parse(r.result);if(!Array.isArray(d.bets))throw 0;
+      if(confirm(`Replace current data with ${d.bets.length} bets from the backup?`)){state=d;save();close();}}
+      catch(err){alert('That file doesn’t look like a Bet Tracker backup.');}
+      e.target.value='';};
+    r.readAsText(f);
+  };
+
+  document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;render();window.scrollTo(0,0);});
+  $('#fab').onclick=()=>openForm(null);
+  $('#seasonBtn').onclick=openSettings;
+  render();
+  if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('./sw.js').catch(()=>{});});}
+})();
+</script>
+</body>
+</html>
