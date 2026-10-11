@@ -161,6 +161,7 @@
 
   function render(){
     document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
+    $('#fab').style.display=tab==='bets'?'':'none';
     $('#seasonBtn').textContent='⚙︎ '+state.seasonName;
     $('#view').innerHTML=tab==='dashboard'?dashboard():betsView();
     bindSlips();
@@ -186,7 +187,7 @@
       </div>
       <div class="card chart"><h3>Running profit / loss</h3>${chart()}</div>
       <div class="card"><h3>Recent bets</h3>${
-        sorted().slice(0,4).map(slip).join('')||'<div class="empty-chart">No bets yet — tap “Log bet” to add your first.</div>'
+        sorted().slice(0,4).map(slip).join('')||'<div class="empty-chart">No bets yet — go to Bets and tap “Log bet” to add your first.</div>'
       }</div>`;
   }
 
