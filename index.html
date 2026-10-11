@@ -100,6 +100,10 @@
   .btn.primary{background:var(--felt);color:#fff}
   .btn.danger{background:transparent;color:#c8343a;border:1px solid #e9b8ba}
   .settings-list .btn{width:100%;margin-bottom:10px;padding:14px;text-align:left}
+  .wintype{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:-2px;font-size:12px;color:var(--muted);font-weight:600}
+  .wintype button{border:1px solid #cfc6b2;background:#fffdf7;color:var(--ink);border-radius:999px;padding:6px 11px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+  .wintype button.on{background:var(--felt);color:#fff;border-color:var(--felt)}
+  .okc{color:#1e9a59} .badc{color:#c8343a}
 </style>
 </head>
 <body>
@@ -270,16 +274,25 @@
 
   function openForm(bet,forceStatus){
     const isNew=!bet;
-    const b=bet?{...bet}:{id:uid(),created:Date.now(),date:today(),stake:'',description:'',odds:'',status:'pending',returns:''};
+    const b=bet?{...bet}:{id:uid(),created:Date.now(),date:today(),stake:'',description:'',odds:'',status:'pending',returns:'',winnings:'',winType:'payout'};
     if(forceStatus) b.status=forceStatus;
-    let retTouched=!!b.returns;
-    const suggest=()=>{const dec=oddsToDecimal(b.odds);return dec&&+b.stake?(b.stake*dec).toFixed(2):'';};
-    const retHtml=()=>{
-      if(b.status!=='won') return '';
-      const sg=suggest(); const val=retTouched?b.returns:(b.returns||sg);
-      return `<div class="field"><label>Total return (${CUR}, incl. stake)</label>
-          <input type="number" inputmode="decimal" step="0.01" min="0" id="f-ret" value="${val}">
-          <div class="hint" id="retHint">${sg?`From odds: ${CUR}${sg}`:'What the bookie paid out, including your stake back.'}</div></div>`;
+    if(b.winType!=='profit') b.winType='payout';
+    // Older bets only stored the total return: show it as a payout figure
+    if((b.winnings===undefined||b.winnings==='')&&b.returns!==''&&b.returns!=null){b.winnings=b.returns;b.winType='payout';}
+    if(b.winnings==null) b.winnings='';
+    const opt='<span style="text-transform:none;letter-spacing:0;font-weight:500">(optional)</span>';
+    // Total paid out (incl. stake) for a win: typed winnings first, otherwise from odds
+    const payout=()=>{
+      const st=+b.stake||0, w=String(b.winnings).trim();
+      if(w!==''&&!isNaN(+w)) return b.winType==='profit'?st+(+w):+w;
+      const dec=oddsToDecimal(b.odds); return dec&&st?st*dec:null;
+    };
+    const summary=()=>{
+      if(b.status!=='won') return 'Only used when the bet is marked Won.';
+      const p=payout();
+      if(p==null) return 'Enter your winnings, or the odds to work it out.';
+      const fromOdds=String(b.winnings).trim()===''?' (from odds)':'';
+      return `Paid out ${money(p)} · you're <b class="${p-(+b.stake||0)>=0?'okc':'badc'}">${signed(p-(+b.stake||0))}</b> on this bet${fromOdds}`;
     };
     const draw=()=>{
       $('#modal').innerHTML=`<div class="overlay" id="ov"><div class="sheet">
@@ -290,37 +303,47 @@
           <div class="field"><label>Date</label><input type="date" id="f-date" value="${b.date}"></div>
           <div class="field"><label>Stake (${CUR})</label><input type="number" inputmode="decimal" step="0.01" min="0" id="f-stake" value="${b.stake}"></div>
         </div>
-        <div class="field"><label>Odds <span style="text-transform:none;letter-spacing:0;font-weight:500">(optional)</span></label>
-          <input id="f-odds" placeholder="e.g. 6/4 or 2.5" value="${esc(b.odds)}">
-          <div class="hint">Used to fill in the return when it wins.</div></div>
         <div class="field"><label>Result</label><div class="seg">
           ${['pending','won','lost','void'].map(s=>`<button type="button" data-s="${s}" class="${s} ${b.status===s?'on':''}">${s[0].toUpperCase()+s.slice(1)}</button>`).join('')}
         </div></div>
-        <div id="retWrap">${retHtml()}</div>
+        <div class="two">
+          <div class="field"><label>Odds ${opt}</label><input id="f-odds" placeholder="6/4 or 2.5" value="${esc(b.odds)}"></div>
+          <div class="field"><label>Winnings (${CUR}) ${opt}</label><input type="number" inputmode="decimal" step="0.01" min="0" id="f-win" placeholder="e.g. 25" value="${b.winnings}"></div>
+        </div>
+        <div class="wintype">
+          <span>Winnings are</span>
+          <button type="button" data-w="payout" class="${b.winType==='payout'?'on':''}">Total paid out</button>
+          <button type="button" data-w="profit" class="${b.winType==='profit'?'on':''}">Profit only</button>
+        </div>
+        <div class="hint" id="winSum" style="margin-top:8px">${summary()}</div>
         <div class="actions">
           ${isNew?'':'<button class="btn danger" id="del">Delete</button>'}
           <button class="btn ghost" id="cancel">Cancel</button>
           <button class="btn primary" id="saveBtn">Save</button>
         </div></div></div>`;
       const grab=()=>{b.description=$('#f-desc').value.trim();b.date=$('#f-date').value||today();
-        b.stake=$('#f-stake').value;b.odds=$('#f-odds').value.trim();if($('#f-ret'))b.returns=$('#f-ret').value;};
+        b.stake=$('#f-stake').value;b.odds=$('#f-odds').value.trim();b.winnings=$('#f-win').value.trim();};
+      const refresh=()=>{grab();$('#winSum').innerHTML=summary();};
       document.querySelectorAll('.seg button').forEach(x=>x.onclick=()=>{grab();b.status=x.dataset.s;draw();});
-      const bindRet=()=>{if($('#f-ret'))$('#f-ret').oninput=()=>{retTouched=true;};};
-      bindRet();
-      // Update only the return field when odds/stake change, so taps on Save aren't lost to a redraw
-      $('#f-odds').oninput=$('#f-stake').oninput=()=>{
-        b.stake=$('#f-stake').value;b.odds=$('#f-odds').value.trim();
-        if(b.status==='won'&&!retTouched){b.returns='';$('#retWrap').innerHTML=retHtml();bindRet();}
-      };
+      // Update only the summary line while typing, so taps on Save aren't lost to a redraw
+      $('#f-odds').oninput=$('#f-stake').oninput=$('#f-win').oninput=refresh;
+      document.querySelectorAll('.wintype button').forEach(x=>x.onclick=()=>{
+        b.winType=x.dataset.w;
+        document.querySelectorAll('.wintype button').forEach(y=>y.classList.toggle('on',y===x));
+        refresh();
+      });
       $('#cancel').onclick=close;
       $('#ov').onclick=e=>{if(e.target.id==='ov')close();};
       if($('#del')) $('#del').onclick=()=>{if(confirm('Delete this bet? This can’t be undone.')){state.bets=state.bets.filter(x=>x.id!==b.id);save();close();}};
       $('#saveBtn').onclick=()=>{
         grab();
         if(!(+b.stake>0)){alert('Enter a stake.');return;}
-        if(b.status==='won'&&!(+b.returns>0)){alert('Enter the total return for the win.');return;}
-        if(b.status!=='won') b.returns='';
-        b.stake=+(+b.stake).toFixed(2); if(b.returns!=='') b.returns=+(+b.returns).toFixed(2);
+        b.stake=+(+b.stake).toFixed(2);
+        if(b.status==='won'){
+          const p=payout();
+          if(!(p>0)){alert('Enter your winnings (or the odds) for the win.');return;}
+          b.returns=+p.toFixed(2);
+        } else b.returns='';
         const i=state.bets.findIndex(x=>x.id===b.id);
         if(i>=0) state.bets[i]=b; else state.bets.push(b);
         save();close();
@@ -328,6 +351,7 @@
     };
     draw();
     if(isNew) setTimeout(()=>$('#f-desc')?.focus(),50);
+    else if(forceStatus==='won') setTimeout(()=>$('#f-win')?.focus(),50);
   }
   function close(){$('#modal').innerHTML='';render();}
 
