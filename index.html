@@ -102,6 +102,30 @@
   .btn.danger{background:transparent;color:#c8343a;border:1px solid #e9b8ba}
   .settings-list .btn{width:100%;margin-bottom:10px;padding:14px;text-align:left}
   .catrow{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .searchbox{margin-top:14px;display:flex;align-items:center;gap:8px;background:var(--felt-2);border:1px solid var(--line);border-radius:12px;padding:0 12px}
+  .searchbox span{color:#9fb3a6;font-size:18px}
+  .searchbox input{flex:1;min-width:0;background:none;border:0;color:#eef3ee;font-size:16px;padding:12px 0;font-family:inherit;outline:none}
+  .searchbox input::-webkit-search-cancel-button{display:none}
+  .searchbox button{background:none;border:0;color:#9fb3a6;font-size:16px;padding:6px;cursor:pointer}
+  .cdot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px}
+  .fsum{margin:14px 4px 0;font-size:13px;color:#c7d4cb}
+  .mpb{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.5px;background:var(--felt);color:var(--gold);padding:2px 6px;border-radius:5px;vertical-align:1px}
+  .check{display:flex;align-items:center;gap:10px;margin:-2px 0 14px;font-weight:600;font-size:15px;cursor:pointer}
+  .check input{width:22px;height:22px;accent-color:var(--felt)}
+  .mpgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .mpcol{background:var(--felt);border:1px solid var(--line);border-radius:12px;padding:12px}
+  .mpcol .k{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#9fb3a6}
+  .mpcol .v{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:20px;margin:4px 0}
+  .mpcol .m{font-size:12px;color:#c7d4cb;line-height:1.5}
+  .srow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+  .srow:last-child{border-bottom:0}
+  .srow .sn{font-weight:700;font-size:15px;display:flex;align-items:center;gap:8px}
+  .srow .sn i{width:10px;height:10px;border-radius:3px}
+  .srow .sm{font-size:12px;color:#9fb3a6;margin-top:3px;line-height:1.4}
+  .srow .sp{font-weight:700;font-size:15px;white-space:nowrap}
+  .srow.sub{padding:7px 0 7px 18px}
+  .srow.sub .sn{font-weight:600;font-size:13px;color:#c7d4cb}
+  .srow.sub .sp{font-size:13px}
   .catrow i{flex:none;width:14px;height:14px;border-radius:4px}
   .catrow input{flex:1;padding:10px 12px;border-radius:10px;border:1px solid #cfc6b2;background:#fffdf7;font-size:16px;font-family:inherit;color:var(--ink)}
   .settings-list .actions .btn{text-align:center}
@@ -146,7 +170,7 @@
   const KEY='bet-tracker-state-v1';
   const CUR='£';
   let state={seasonName:'2026/27 Season',bets:[]};
-  let tab='dashboard', filter='all';
+  let tab='dashboard', filter='all', catFilter='all', query='';
 
   try{const s=localStorage.getItem(KEY); if(s) state=Object.assign(state,JSON.parse(s));}catch(e){}
   const CAT_COLORS=['#e3b341','#4f8fd6','#a77bd6','#2bb5b0','#e08a3c','#d66ba0','#8fa3b8','#c9c26a'];
@@ -156,9 +180,26 @@
       state.categories=['Bets','LMS','FF','Poker'].map((n,i)=>({id:'c'+i,name:n,color:CAT_COLORS[i]}));
     const ids=new Set(state.categories.map(c=>c.id));
     state.bets.forEach(b=>{if(!ids.has(b.cat)) b.cat=state.categories[0].id;});
+    // Bet types live on the "Bets" category (kept by id, so renaming it is fine)
+    if(!state.typesInit){
+      const bc=state.categories.find(c=>c.name.trim().toLowerCase()==='bets')||state.categories.find(c=>c.id==='c0');
+      if(bc) bc.hasTypes=true;
+      state.typesInit=true;
+    }
+    if(!Array.isArray(state.betTypes)||!state.betTypes.length)
+      state.betTypes=['Single','Double','Treble','Acca','Bet Builder'].map((n,i)=>({id:'t'+i,name:n}));
   }
   ensureCats();
   const catOf=id=>state.categories.find(c=>c.id===id)||state.categories[0];
+  const typeOf=id=>state.betTypes.find(t=>t.id===id);
+  const hasTypes=b=>!!catOf(b.cat).hasTypes;
+  // W/L, P/L and ROI for any group of bets
+  function summarise(bets){
+    const st=bets.filter(b=>b.status==='won'||b.status==='lost');
+    const w=st.filter(b=>b.status==='won').length, staked=st.reduce((a,b)=>a+(+b.stake||0),0), net=st.reduce((a,b)=>a+pl(b),0);
+    return {n:bets.length,settled:st.length,w,l:st.length-w,staked,net,winRate:st.length?w/st.length*100:0,roi:staked?net/staked*100:0};
+  }
+  const pct=(n,dp=0)=>(n>0.004?'+':n<-0.004?'−':'')+Math.abs(n).toFixed(dp)+'%';
   function save(){try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}}
 
   const $=s=>document.querySelector(s);
@@ -198,6 +239,12 @@
     $('#view').innerHTML=tab==='dashboard'?dashboard():betsView();
     bindSlips();
     document.querySelectorAll('.chip[data-f]').forEach(c=>c.onclick=()=>{filter=c.dataset.f;render();});
+    document.querySelectorAll('.chip[data-cf]').forEach(c=>c.onclick=()=>{catFilter=c.dataset.cf;render();});
+    const q=$('#search');
+    if(q){
+      q.oninput=()=>{query=q.value;$('#betList').innerHTML=listHtml();bindSlips();$('#clearQ').style.display=query?'':'none';};
+      $('#clearQ').onclick=()=>{q.value='';q.oninput();q.focus();};
+    }
     document.querySelectorAll('.chip[data-pie]').forEach(c=>c.onclick=()=>{pieMode=c.dataset.pie;render();});
   }
 
@@ -221,9 +268,11 @@
       </div>
       <div class="card chart"><h3>Running profit / loss</h3>${chart()}</div>
       <div class="card chart"><h3>Monthly won / lost</h3>${monthly()}</div>
+      <div class="card"><h3>Match Predictor vs own picks</h3>${mpCard()}</div>
       <div class="card chart"><h3>By category</h3>
         <div class="filters" style="margin:0 0 10px">${[['wagered','Wagered'],['won','Won'],['lost','Lost']].map(([k,l])=>`<button class="chip ${pieMode===k?'on':''}" data-pie="${k}">${l}</button>`).join('')}</div>
-        ${pie()}</div>`;
+        ${pie()}</div>
+      <div class="card"><h3>Category stats</h3>${catStats()}</div>`;
   }
 
   function chart(){
@@ -307,11 +356,55 @@
         <span class="mono">${money(r.v)}</span><span class="pct">${Math.round(r.v/total*100)}%</span></div>`).join('')}</div></div>`;
   }
 
-  function betsView(){
-    const fs=[['all','All'],['pending','Pending'],['won','Won'],['lost','Lost']];
-    let list=sorted(); if(filter!=='all') list=list.filter(b=>b.status===filter);
-    let html=`<div class="filters">${fs.map(([k,l])=>`<button class="chip ${filter===k?'on':''}" data-f="${k}">${l} (${k==='all'?state.bets.length:state.bets.filter(b=>b.status===k).length})</button>`).join('')}</div>`;
-    if(!list.length) return html+'<div class="empty">Nothing here yet.</div>';
+  function mpCard(){
+    const pool=state.bets.filter(hasTypes);
+    const mp=summarise(pool.filter(b=>b.mp)), own=summarise(pool.filter(b=>!b.mp));
+    if(!mp.n) return '<div class="empty-chart">Tick “From Match Predictor” when you log a bet to compare the predictor’s picks with your own.</div>';
+    const col=(t,s)=>`<div class="mpcol"><div class="k">${t}</div>
+      <div class="v ${cls(s.net)}">${signed(s.net)}</div>
+      <div class="m">${s.w}W – ${s.l}L${s.settled?` · ${s.winRate.toFixed(0)}% won`:''}</div>
+      <div class="m">${s.staked?`ROI ${pct(s.roi,1)} · ${money(s.staked)} staked`:'Nothing settled yet'}</div></div>`;
+    const diff=mp.net-own.net;
+    const verdict=!mp.settled?'Settle some predictor bets to see how it’s doing.':
+      Math.abs(diff)<0.005?'Both are level so far.':
+      diff>0?`The predictor is <b class="okc">${money(diff)}</b> ahead of your own picks.`:`Your own picks are <b class="okc">${money(-diff)}</b> ahead of the predictor.`;
+    return `<div class="mpgrid">${col('Match Predictor',mp)}${col('Own picks',own)}</div><div class="hint" style="margin-top:10px;color:#9fb3a6">${verdict}</div>`;
+  }
+
+  function catStats(){
+    const rows=state.categories.map(c=>({c,s:summarise(state.bets.filter(b=>b.cat===c.id))})).filter(r=>r.s.n);
+    if(!rows.length) return '<div class="empty-chart">Log some bets to see stats per category.</div>';
+    const line=s=>`${s.w}W – ${s.l}L${s.settled?` · ${s.winRate.toFixed(0)}% won`:''}${s.staked?` · ${money(s.staked)} staked · ROI ${pct(s.roi,1)}`:''}`;
+    return rows.map(({c,s})=>{
+      let sub='';
+      if(c.hasTypes){
+        const groups=[...state.betTypes.map(t=>({name:t.name,id:t.id})),{name:'No type',id:''}]
+          .map(t=>({t,s:summarise(state.bets.filter(b=>b.cat===c.id&&(b.type||'')===t.id&&(t.id||!typeOf(b.type))))}))
+          .filter(x=>x.s.n);
+        sub=groups.map(({t,s})=>`<div class="srow sub"><div><div class="sn">${esc(t.name)}</div><div class="sm">${line(s)}</div></div>
+          <div class="sp mono ${cls(s.net)}">${signed(s.net)}</div></div>`).join('');
+      }
+      return `<div class="srow"><div><div class="sn"><i style="background:${c.color}"></i>${esc(c.name)}</div><div class="sm">${line(s)}</div></div>
+        <div class="sp mono ${cls(s.net)}">${signed(s.net)}</div></div>${sub}`;
+    }).join('');
+  }
+
+  function matches(b){
+    if(catFilter!=='all'&&b.cat!==catFilter) return false;
+    const q=query.trim().toLowerCase(); if(!q) return true;
+    const t=typeOf(b.type);
+    return [b.description,catOf(b.cat).name,t&&hasTypes(b)?t.name:'',b.odds,b.mp?'match predictor':'']
+      .some(v=>String(v||'').toLowerCase().includes(q));
+  }
+  function listHtml(){
+    const base=sorted().filter(matches);
+    const list=filter==='all'?base:base.filter(b=>b.status===filter);
+    let html='';
+    if(catFilter!=='all'||query.trim()){
+      const s=summarise(list);
+      html+=`<div class="fsum">${list.length} bet${list.length===1?'':'s'} · ${s.w}W – ${s.l}L · <span class="mono ${cls(s.net)}">${signed(s.net)}</span></div>`;
+    }
+    if(!list.length) return html+`<div class="empty">${query.trim()?'No bets match your search.':'Nothing here yet.'}</div>`;
     const groups={};
     list.forEach(b=>{const k=b.date.slice(0,7);(groups[k]=groups[k]||[]).push(b);});
     Object.keys(groups).forEach(k=>{
@@ -322,6 +415,18 @@
     });
     return html;
   }
+  function betsView(){
+    if(catFilter!=='all'&&!state.categories.some(c=>c.id===catFilter)) catFilter='all';
+    const inCat=state.bets.filter(b=>catFilter==='all'||b.cat===catFilter);
+    const fs=[['all','All'],['pending','Pending'],['won','Won'],['lost','Lost']];
+    return `<div class="searchbox"><span aria-hidden="true">⌕</span>
+        <input id="search" type="search" placeholder="Search bets" value="${esc(query)}" autocomplete="off">
+        <button id="clearQ" aria-label="Clear search" style="${query?'':'display:none'}">✕</button></div>
+      <div class="filters">${[['all','All categories'],...state.categories.map(c=>[c.id,c.name])].map(([k,l])=>
+        `<button class="chip ${catFilter===k?'on':''}" data-cf="${k}">${k==='all'?'':`<i class="cdot" style="background:${catOf(k).color}"></i>`}${esc(l)}</button>`).join('')}</div>
+      <div class="filters" style="margin-top:8px">${fs.map(([k,l])=>`<button class="chip ${filter===k?'on':''}" data-f="${k}">${l} (${k==='all'?inCat.length:inCat.filter(b=>b.status===k).length})</button>`).join('')}</div>
+      <div id="betList">${listHtml()}</div>`;
+  }
 
   function slip(b){
     const p=pl(b);
@@ -330,7 +435,7 @@
       <div class="top">
         <div style="min-width:0">
           <div class="desc">${esc(b.description)||'<span style="color:#7c7566">No description</span>'}</div>
-          <div class="meta"><span class="cat"><i style="background:${catOf(b.cat).color}"></i>${esc(catOf(b.cat).name)}</span> · ${fmtDate(b.date)} · Stake ${money(+b.stake||0)}${b.odds?` · Odds ${esc(b.odds)}`:''}${b.status==='won'?` · Returned ${money(+b.returns||0)}`:''}</div>
+          <div class="meta"><span class="cat"><i style="background:${catOf(b.cat).color}"></i>${esc(catOf(b.cat).name)}${hasTypes(b)&&typeOf(b.type)?` · ${esc(typeOf(b.type).name)}`:''}</span>${hasTypes(b)&&b.mp?' <span class="mpb">MP</span>':''} · ${fmtDate(b.date)} · Stake ${money(+b.stake||0)}${b.odds?` · Odds ${esc(b.odds)}`:''}${b.status==='won'?` · Returned ${money(+b.returns||0)}`:''}</div>
         </div>
         <div style="text-align:right">
           ${b.status==='pending'?`<span class="status-tag">${tag}</span>`:`<div class="pl ${cls(p)}">${b.status==='void'?'Void':signed(p)}</div>`}
@@ -364,7 +469,8 @@
 
   function openForm(bet,forceStatus){
     const isNew=!bet;
-    const b=bet?{...bet}:{id:uid(),created:Date.now(),date:today(),stake:'',description:'',odds:'',status:'pending',returns:'',winnings:'',winType:'payout',cat:(state.categories.some(c=>c.id===state.lastCat)?state.lastCat:state.categories[0].id)};
+    const b=bet?{...bet}:{id:uid(),created:Date.now(),date:today(),stake:'',description:'',odds:'',status:'pending',returns:'',winnings:'',winType:'payout',cat:(state.categories.some(c=>c.id===state.lastCat)?state.lastCat:state.categories[0].id),type:(typeOf(state.lastType)?state.lastType:state.betTypes[0].id),mp:false};
+    if(!typeOf(b.type)) b.type=typeOf(state.lastType)?state.lastType:state.betTypes[0].id;
     if(forceStatus) b.status=forceStatus;
     if(b.winType!=='profit') b.winType='payout';
     // Older bets only stored the total return: show it as a payout figure
@@ -389,6 +495,11 @@
         <h2>${isNew?'Log a bet':'Edit bet'}</h2>
         <div class="field"><label>Category</label>
           <select id="f-cat">${state.categories.map(c=>`<option value="${c.id}" ${b.cat===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div>
+        <div id="typeWrap" style="${hasTypes(b)?'':'display:none'}">
+          <div class="field"><label>Bet type</label>
+            <select id="f-type">${state.betTypes.map(t=>`<option value="${t.id}" ${b.type===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></div>
+          <label class="check"><input type="checkbox" id="f-mp" ${b.mp?'checked':''}><span>From Match Predictor</span></label>
+        </div>
         <div class="field"><label>Description</label>
           <textarea id="f-desc" placeholder="e.g. Arsenal to win + BTTS">${esc(b.description)}</textarea></div>
         <div class="two">
@@ -413,9 +524,10 @@
           <button class="btn ghost" id="cancel">Cancel</button>
           <button class="btn primary" id="saveBtn">Save</button>
         </div></div></div>`;
-      const grab=()=>{b.cat=$('#f-cat').value;b.description=$('#f-desc').value.trim();b.date=$('#f-date').value||today();
+      const grab=()=>{b.cat=$('#f-cat').value;b.type=$('#f-type').value;b.mp=$('#f-mp').checked;b.description=$('#f-desc').value.trim();b.date=$('#f-date').value||today();
         b.stake=$('#f-stake').value;b.odds=$('#f-odds').value.trim();b.winnings=$('#f-win').value.trim();};
       const refresh=()=>{grab();$('#winSum').innerHTML=summary();};
+      $('#f-cat').onchange=()=>{b.cat=$('#f-cat').value;$('#typeWrap').style.display=hasTypes(b)?'':'none';};
       document.querySelectorAll('.seg button').forEach(x=>x.onclick=()=>{grab();b.status=x.dataset.s;draw();});
       // Update only the summary line while typing, so taps on Save aren't lost to a redraw
       $('#f-odds').oninput=$('#f-stake').oninput=$('#f-win').oninput=refresh;
@@ -437,6 +549,7 @@
           b.returns=+p.toFixed(2);
         } else b.returns='';
         state.lastCat=b.cat;
+        if(hasTypes(b)) state.lastType=b.type; else {b.type='';b.mp=false;}
         const i=state.bets.findIndex(x=>x.id===b.id);
         if(i>=0) state.bets[i]=b; else state.bets.push(b);
         save();close();
@@ -453,6 +566,7 @@
       <h2>Season</h2>
       <div class="field"><label>Season name</label><input id="s-name" value="${esc(state.seasonName)}"></div>
       <div class="field"><label>Categories</label><div id="catList"></div></div>
+      <div class="field"><label>Bet types <span style="text-transform:none;letter-spacing:0;font-weight:500">(shown for ${esc((state.categories.find(c=>c.hasTypes)||{name:'Bets'}).name)})</span></label><div id="typeList"></div></div>
       <button class="btn ghost" id="exp">⬇︎ Back up data (JSON)</button>
       <button class="btn ghost" id="csv">⬇︎ Export to spreadsheet (CSV)</button>
       <button class="btn ghost" id="imp">⬆︎ Restore from backup</button>
@@ -462,8 +576,8 @@
     const dl=(name,txt,type)=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type}));a.download=name;a.click();};
     $('#exp').onclick=()=>dl('bet-tracker-backup-'+today()+'.json',JSON.stringify(state,null,2),'application/json');
     $('#csv').onclick=()=>{
-      const rows=[['Date','Category','Description','Stake','Odds','Result','Return','Profit/Loss']];
-      sorted().reverse().forEach(b=>rows.push([b.date,catOf(b.cat).name,b.description,b.stake,b.odds,b.status,b.returns,pl(b).toFixed(2)]));
+      const rows=[['Date','Category','Bet type','Match Predictor','Description','Stake','Odds','Result','Return','Profit/Loss']];
+      sorted().reverse().forEach(b=>rows.push([b.date,catOf(b.cat).name,hasTypes(b)&&typeOf(b.type)?typeOf(b.type).name:'',hasTypes(b)&&b.mp?'Yes':'',b.description,b.stake,b.odds,b.status,b.returns,pl(b).toFixed(2)]));
       dl('bets-'+today()+'.csv',rows.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\n'),'text/csv');
     };
     $('#imp').onclick=()=>$('#importFile').click();
@@ -471,28 +585,34 @@
       if(confirm('Clear every bet and start fresh? Back up first if you want to keep this season.')){
         state.bets=[];save();close();}
     };
-    const drawCats=(focusId)=>{
-      $('#catList').innerHTML=state.categories.map(c=>`<div class="catrow"><i style="background:${c.color}"></i>
-        <input data-cid="${c.id}" value="${esc(c.name)}"><button class="btn ghost" data-delcat="${c.id}" aria-label="Delete ${esc(c.name)}">✕</button></div>`).join('')
-        +'<button class="btn ghost" id="addCat">+ Add category</button>';
-      document.querySelectorAll('#catList input').forEach(inp=>inp.oninput=()=>{
-        const c=state.categories.find(x=>x.id===inp.dataset.cid); c.name=inp.value.trim()||'Untitled'; save();});
-      document.querySelectorAll('[data-delcat]').forEach(btn=>btn.onclick=()=>{
-        if(state.categories.length===1){alert('You need at least one category.');return;}
-        const c=state.categories.find(x=>x.id===btn.dataset.delcat);
-        const rest=state.categories.filter(x=>x.id!==c.id), n=state.bets.filter(b=>b.cat===c.id).length;
-        if(!confirm(n?`Delete “${c.name}”? Its ${n} bet${n>1?'s':''} will move to “${rest[0].name}”.`:`Delete “${c.name}”?`)) return;
-        state.bets.forEach(b=>{if(b.cat===c.id) b.cat=rest[0].id;});
-        state.categories=rest; save(); drawCats();
-      });
-      $('#addCat').onclick=()=>{
-        const used=new Set(state.categories.map(c=>c.color));
-        const c={id:uid(),name:'New category',color:CAT_COLORS.find(x=>!used.has(x))||CAT_COLORS[state.categories.length%CAT_COLORS.length]};
-        state.categories.push(c); save(); drawCats(c.id);
+    // One editor for both lists: rename in place, add, delete (moving bets to the first remaining item)
+    const editor=(box,key,field,noun,withColor)=>{
+      const draw=(focusId)=>{
+        const items=state[key];
+        $(box).innerHTML=items.map(c=>`<div class="catrow">${withColor?`<i style="background:${c.color}"></i>`:''}
+          <input data-id="${c.id}" value="${esc(c.name)}"><button class="btn ghost" data-del="${c.id}" aria-label="Delete ${esc(c.name)}">✕</button></div>`).join('')
+          +`<button class="btn ghost" data-add>+ Add ${noun}</button>`;
+        $(box).querySelectorAll('input').forEach(inp=>inp.oninput=()=>{
+          state[key].find(x=>x.id===inp.dataset.id).name=inp.value.trim()||'Untitled'; save();});
+        $(box).querySelectorAll('[data-del]').forEach(btn=>btn.onclick=()=>{
+          if(state[key].length===1){alert(`You need at least one ${noun}.`);return;}
+          const c=state[key].find(x=>x.id===btn.dataset.del);
+          const rest=state[key].filter(x=>x.id!==c.id), n=state.bets.filter(b=>b[field]===c.id).length;
+          if(!confirm(n?`Delete “${c.name}”? Its ${n} bet${n>1?'s':''} will move to “${rest[0].name}”.`:`Delete “${c.name}”?`)) return;
+          state.bets.forEach(b=>{if(b[field]===c.id) b[field]=rest[0].id;});
+          state[key]=rest; save(); draw();
+        });
+        $(box).querySelector('[data-add]').onclick=()=>{
+          const c={id:uid(),name:'New '+noun};
+          if(withColor){const used=new Set(state[key].map(x=>x.color));c.color=CAT_COLORS.find(x=>!used.has(x))||CAT_COLORS[state[key].length%CAT_COLORS.length];}
+          state[key].push(c); save(); draw(c.id);
+        };
+        if(focusId){const el=$(box).querySelector(`input[data-id="${focusId}"]`); el.focus(); el.select();}
       };
-      if(focusId){const el=document.querySelector(`#catList input[data-cid="${focusId}"]`); el.focus(); el.select();}
+      draw();
     };
-    drawCats();
+    editor('#catList','categories','cat','category',true);
+    editor('#typeList','betTypes','type','bet type',false);
     $('#done').onclick=()=>{state.seasonName=$('#s-name').value.trim()||'Season';save();close();};
     $('#ov').onclick=e=>{if(e.target.id==='ov'){state.seasonName=$('#s-name').value.trim()||'Season';save();close();}};
   }
