@@ -100,6 +100,23 @@
   .btn.primary{background:var(--felt);color:#fff}
   .btn.danger{background:transparent;color:#c8343a;border:1px solid #e9b8ba}
   .settings-list .btn{width:100%;margin-bottom:10px;padding:14px;text-align:left}
+  .catrow{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .catrow i{flex:none;width:14px;height:14px;border-radius:4px}
+  .catrow input{flex:1;padding:10px 12px;border-radius:10px;border:1px solid #cfc6b2;background:#fffdf7;font-size:16px;font-family:inherit;color:var(--ink)}
+  .settings-list .actions .btn{text-align:center}
+  .settings-list .catrow .btn{width:auto;margin:0;padding:10px 14px;text-align:center}
+  .cat{display:inline-flex;align-items:center;gap:5px;font-weight:600;color:#4a463c}
+  .cat i{width:8px;height:8px;border-radius:50%;display:inline-block}
+  .pie{display:flex;align-items:center;gap:14px}
+  .pie svg{width:46%;max-width:200px;flex:none}
+  .legend{flex:1;min-width:0}
+  .lrow{display:grid;grid-template-columns:12px 1fr auto auto;gap:8px;align-items:center;font-size:13px;padding:6px 0;border-bottom:1px solid var(--line)}
+  .lrow:last-child{border-bottom:0}
+  .lrow i{width:10px;height:10px;border-radius:3px}
+  .lrow .ln{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .lrow .mono{font-weight:700}
+  .lrow .pct{color:#9fb3a6;width:34px;text-align:right}
+  .field select{appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,#7c7566 50%),linear-gradient(135deg,#7c7566 50%,transparent 50%);background-position:calc(100% - 18px) 52%,calc(100% - 12px) 52%;background-size:6px 6px;background-repeat:no-repeat}
   .wintype{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:-2px;font-size:12px;color:var(--muted);font-weight:600}
   .wintype button{border:1px solid #cfc6b2;background:#fffdf7;color:var(--ink);border-radius:999px;padding:6px 11px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
   .wintype button.on{background:var(--felt);color:#fff;border-color:var(--felt)}
@@ -131,6 +148,16 @@
   let tab='dashboard', filter='all';
 
   try{const s=localStorage.getItem(KEY); if(s) state=Object.assign(state,JSON.parse(s));}catch(e){}
+  const CAT_COLORS=['#e3b341','#4f8fd6','#a77bd6','#2bb5b0','#e08a3c','#d66ba0','#8fa3b8','#c9c26a'];
+  let pieMode='wagered';
+  function ensureCats(){
+    if(!Array.isArray(state.categories)||!state.categories.length)
+      state.categories=['Bets','LMS','FF','Poker'].map((n,i)=>({id:'c'+i,name:n,color:CAT_COLORS[i]}));
+    const ids=new Set(state.categories.map(c=>c.id));
+    state.bets.forEach(b=>{if(!ids.has(b.cat)) b.cat=state.categories[0].id;});
+  }
+  ensureCats();
+  const catOf=id=>state.categories.find(c=>c.id===id)||state.categories[0];
   function save(){try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}}
 
   const $=s=>document.querySelector(s);
@@ -169,7 +196,8 @@
     $('#seasonBtn').textContent='⚙︎ '+state.seasonName;
     $('#view').innerHTML=tab==='dashboard'?dashboard():betsView();
     bindSlips();
-    document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{filter=c.dataset.f;render();});
+    document.querySelectorAll('.chip[data-f]').forEach(c=>c.onclick=()=>{filter=c.dataset.f;render();});
+    document.querySelectorAll('.chip[data-pie]').forEach(c=>c.onclick=()=>{pieMode=c.dataset.pie;render();});
   }
 
   function dashboard(){
@@ -190,7 +218,10 @@
         <div class="stat"><div class="k">Pending stake</div><div class="v">${money(s.pendingStake)}</div></div>
       </div>
       <div class="card chart"><h3>Running profit / loss</h3>${chart()}</div>
-      <div class="card chart"><h3>Monthly won / lost</h3>${monthly()}</div>`;
+      <div class="card chart"><h3>Monthly won / lost</h3>${monthly()}</div>
+      <div class="card chart"><h3>By category</h3>
+        <div class="filters" style="margin:0 0 10px">${[['wagered','Wagered'],['won','Won'],['lost','Lost']].map(([k,l])=>`<button class="chip ${pieMode===k?'on':''}" data-pie="${k}">${l}</button>`).join('')}</div>
+        ${pie()}</div>`;
   }
 
   function chart(){
@@ -248,6 +279,32 @@
         <span style="margin-left:auto">£ = month's profit/loss</span></div>`;
   }
 
+  function pie(){
+    const val=b=>{
+      if(pieMode==='wagered') return b.status==='void'?0:(+b.stake||0);
+      if(pieMode==='won') return b.status==='won'?Math.max(0,pl(b)):0;
+      return b.status==='lost'?(+b.stake||0):0;
+    };
+    const rows=state.categories.map(c=>({c,v:state.bets.filter(b=>b.cat===c.id).reduce((a,b)=>a+val(b),0)})).filter(r=>r.v>0.004).sort((a,b)=>b.v-a.v);
+    const total=rows.reduce((a,r)=>a+r.v,0);
+    const word={wagered:'wagered',won:'won (profit)',lost:'lost'}[pieMode];
+    if(!total) return `<div class="empty-chart">Nothing ${pieMode==='wagered'?'wagered':pieMode} yet.</div>`;
+    const R0=80,R1=50,C=100; let a0=-Math.PI/2, arcs='';
+    const pt=(r,a)=>`${(C+r*Math.cos(a)).toFixed(2)},${(C+r*Math.sin(a)).toFixed(2)}`;
+    rows.forEach(r=>{
+      if(rows.length===1){arcs+=`<circle cx="${C}" cy="${C}" r="${(R0+R1)/2}" fill="none" stroke="${r.c.color}" stroke-width="${R0-R1}"/>`;return;}
+      const a1=a0+r.v/total*Math.PI*2, big=a1-a0>Math.PI?1:0;
+      arcs+=`<path d="M${pt(R0,a0)} A${R0},${R0} 0 ${big} 1 ${pt(R0,a1)} L${pt(R1,a1)} A${R1},${R1} 0 ${big} 0 ${pt(R1,a0)} Z" fill="${r.c.color}" stroke="var(--felt-2)" stroke-width="2"/>`;
+      a0=a1;
+    });
+    return `<div class="pie">
+      <svg viewBox="0 0 200 200" role="img" aria-label="Amount ${word} by category">${arcs}
+        <text x="100" y="98" text-anchor="middle" font-size="19" font-weight="700" font-family="JetBrains Mono,monospace" fill="#eef3ee">${money(total).replace('.00','')}</text>
+        <text x="100" y="118" text-anchor="middle" font-size="11" fill="#9fb3a6">${word}</text></svg>
+      <div class="legend">${rows.map(r=>`<div class="lrow"><i style="background:${r.c.color}"></i><span class="ln">${esc(r.c.name)}</span>
+        <span class="mono">${money(r.v)}</span><span class="pct">${Math.round(r.v/total*100)}%</span></div>`).join('')}</div></div>`;
+  }
+
   function betsView(){
     const fs=[['all','All'],['pending','Pending'],['won','Won'],['lost','Lost']];
     let list=sorted(); if(filter!=='all') list=list.filter(b=>b.status===filter);
@@ -271,7 +328,7 @@
       <div class="top">
         <div style="min-width:0">
           <div class="desc">${esc(b.description)||'<span style="color:#7c7566">No description</span>'}</div>
-          <div class="meta">${fmtDate(b.date)} · Stake ${money(+b.stake||0)}${b.odds?` · Odds ${esc(b.odds)}`:''}${b.status==='won'?` · Returned ${money(+b.returns||0)}`:''}</div>
+          <div class="meta"><span class="cat"><i style="background:${catOf(b.cat).color}"></i>${esc(catOf(b.cat).name)}</span> · ${fmtDate(b.date)} · Stake ${money(+b.stake||0)}${b.odds?` · Odds ${esc(b.odds)}`:''}${b.status==='won'?` · Returned ${money(+b.returns||0)}`:''}</div>
         </div>
         <div style="text-align:right">
           ${b.status==='pending'?`<span class="status-tag">${tag}</span>`:`<div class="pl ${cls(p)}">${b.status==='void'?'Void':signed(p)}</div>`}
@@ -305,7 +362,7 @@
 
   function openForm(bet,forceStatus){
     const isNew=!bet;
-    const b=bet?{...bet}:{id:uid(),created:Date.now(),date:today(),stake:'',description:'',odds:'',status:'pending',returns:'',winnings:'',winType:'payout'};
+    const b=bet?{...bet}:{id:uid(),created:Date.now(),date:today(),stake:'',description:'',odds:'',status:'pending',returns:'',winnings:'',winType:'payout',cat:(state.categories.some(c=>c.id===state.lastCat)?state.lastCat:state.categories[0].id)};
     if(forceStatus) b.status=forceStatus;
     if(b.winType!=='profit') b.winType='payout';
     // Older bets only stored the total return: show it as a payout figure
@@ -328,6 +385,8 @@
     const draw=()=>{
       $('#modal').innerHTML=`<div class="overlay" id="ov"><div class="sheet">
         <h2>${isNew?'Log a bet':'Edit bet'}</h2>
+        <div class="field"><label>Category</label>
+          <select id="f-cat">${state.categories.map(c=>`<option value="${c.id}" ${b.cat===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div>
         <div class="field"><label>Description</label>
           <textarea id="f-desc" placeholder="e.g. Arsenal to win + BTTS">${esc(b.description)}</textarea></div>
         <div class="two">
@@ -352,7 +411,7 @@
           <button class="btn ghost" id="cancel">Cancel</button>
           <button class="btn primary" id="saveBtn">Save</button>
         </div></div></div>`;
-      const grab=()=>{b.description=$('#f-desc').value.trim();b.date=$('#f-date').value||today();
+      const grab=()=>{b.cat=$('#f-cat').value;b.description=$('#f-desc').value.trim();b.date=$('#f-date').value||today();
         b.stake=$('#f-stake').value;b.odds=$('#f-odds').value.trim();b.winnings=$('#f-win').value.trim();};
       const refresh=()=>{grab();$('#winSum').innerHTML=summary();};
       document.querySelectorAll('.seg button').forEach(x=>x.onclick=()=>{grab();b.status=x.dataset.s;draw();});
@@ -375,6 +434,7 @@
           if(!(p>0)){alert('Enter your winnings (or the odds) for the win.');return;}
           b.returns=+p.toFixed(2);
         } else b.returns='';
+        state.lastCat=b.cat;
         const i=state.bets.findIndex(x=>x.id===b.id);
         if(i>=0) state.bets[i]=b; else state.bets.push(b);
         save();close();
@@ -390,6 +450,7 @@
     $('#modal').innerHTML=`<div class="overlay" id="ov"><div class="sheet settings-list">
       <h2>Season</h2>
       <div class="field"><label>Season name</label><input id="s-name" value="${esc(state.seasonName)}"></div>
+      <div class="field"><label>Categories</label><div id="catList"></div></div>
       <button class="btn ghost" id="exp">⬇︎ Back up data (JSON)</button>
       <button class="btn ghost" id="csv">⬇︎ Export to spreadsheet (CSV)</button>
       <button class="btn ghost" id="imp">⬆︎ Restore from backup</button>
@@ -399,8 +460,8 @@
     const dl=(name,txt,type)=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type}));a.download=name;a.click();};
     $('#exp').onclick=()=>dl('bet-tracker-backup-'+today()+'.json',JSON.stringify(state,null,2),'application/json');
     $('#csv').onclick=()=>{
-      const rows=[['Date','Description','Stake','Odds','Result','Return','Profit/Loss']];
-      sorted().reverse().forEach(b=>rows.push([b.date,b.description,b.stake,b.odds,b.status,b.returns,pl(b).toFixed(2)]));
+      const rows=[['Date','Category','Description','Stake','Odds','Result','Return','Profit/Loss']];
+      sorted().reverse().forEach(b=>rows.push([b.date,catOf(b.cat).name,b.description,b.stake,b.odds,b.status,b.returns,pl(b).toFixed(2)]));
       dl('bets-'+today()+'.csv',rows.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\n'),'text/csv');
     };
     $('#imp').onclick=()=>$('#importFile').click();
@@ -408,6 +469,28 @@
       if(confirm('Clear every bet and start fresh? Back up first if you want to keep this season.')){
         state.bets=[];save();close();}
     };
+    const drawCats=(focusId)=>{
+      $('#catList').innerHTML=state.categories.map(c=>`<div class="catrow"><i style="background:${c.color}"></i>
+        <input data-cid="${c.id}" value="${esc(c.name)}"><button class="btn ghost" data-delcat="${c.id}" aria-label="Delete ${esc(c.name)}">✕</button></div>`).join('')
+        +'<button class="btn ghost" id="addCat">+ Add category</button>';
+      document.querySelectorAll('#catList input').forEach(inp=>inp.oninput=()=>{
+        const c=state.categories.find(x=>x.id===inp.dataset.cid); c.name=inp.value.trim()||'Untitled'; save();});
+      document.querySelectorAll('[data-delcat]').forEach(btn=>btn.onclick=()=>{
+        if(state.categories.length===1){alert('You need at least one category.');return;}
+        const c=state.categories.find(x=>x.id===btn.dataset.delcat);
+        const rest=state.categories.filter(x=>x.id!==c.id), n=state.bets.filter(b=>b.cat===c.id).length;
+        if(!confirm(n?`Delete “${c.name}”? Its ${n} bet${n>1?'s':''} will move to “${rest[0].name}”.`:`Delete “${c.name}”?`)) return;
+        state.bets.forEach(b=>{if(b.cat===c.id) b.cat=rest[0].id;});
+        state.categories=rest; save(); drawCats();
+      });
+      $('#addCat').onclick=()=>{
+        const used=new Set(state.categories.map(c=>c.color));
+        const c={id:uid(),name:'New category',color:CAT_COLORS.find(x=>!used.has(x))||CAT_COLORS[state.categories.length%CAT_COLORS.length]};
+        state.categories.push(c); save(); drawCats(c.id);
+      };
+      if(focusId){const el=document.querySelector(`#catList input[data-cid="${focusId}"]`); el.focus(); el.select();}
+    };
+    drawCats();
     $('#done').onclick=()=>{state.seasonName=$('#s-name').value.trim()||'Season';save();close();};
     $('#ov').onclick=e=>{if(e.target.id==='ov'){state.seasonName=$('#s-name').value.trim()||'Season';save();close();}};
   }
@@ -415,7 +498,7 @@
     const f=e.target.files[0]; if(!f) return;
     const r=new FileReader();
     r.onload=()=>{try{const d=JSON.parse(r.result);if(!Array.isArray(d.bets))throw 0;
-      if(confirm(`Replace current data with ${d.bets.length} bets from the backup?`)){state=d;save();close();}}
+      if(confirm(`Replace current data with ${d.bets.length} bets from the backup?`)){state=d;ensureCats();save();close();}}
       catch(err){alert('That file doesn’t look like a Bet Tracker backup.');}
       e.target.value='';};
     r.readAsText(f);
