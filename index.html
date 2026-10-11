@@ -30,6 +30,7 @@
   .brand span{color:var(--gold)}
   .season{font-size:12px;color:#9fb3a6;background:var(--felt-2);border:1px solid var(--line);padding:6px 10px;border-radius:999px;cursor:pointer}
   .mono{font-family:'JetBrains Mono',monospace}
+  .tagline{margin:12px 2px 0;font-style:italic;font-size:14px;color:#9fb3a6}
 
   /* hero */
   .hero{margin-top:16px;border-radius:20px;padding:22px 20px;background:linear-gradient(160deg,var(--felt-3),var(--felt-2));border:1px solid var(--line);position:relative;overflow:hidden}
@@ -205,6 +206,7 @@
     const c=cls(s.net);
     const word=c==='up'?'In profit':c==='down'?'Down':'Breaking even';
     return `
+      <p class="tagline">Match Predictor app started 10th October 2026</p>
       <section class="hero">
         <div class="label">Season profit / loss</div>
         <div class="big ${c}">${signed(s.net)}</div>
