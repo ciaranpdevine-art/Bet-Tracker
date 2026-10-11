@@ -190,9 +190,7 @@
         <div class="stat"><div class="k">Pending stake</div><div class="v">${money(s.pendingStake)}</div></div>
       </div>
       <div class="card chart"><h3>Running profit / loss</h3>${chart()}</div>
-      <div class="card"><h3>Recent bets</h3>${
-        sorted().slice(0,4).map(slip).join('')||'<div class="empty-chart">No bets yet — go to Bets and tap “Log bet” to add your first.</div>'
-      }</div>`;
+      <div class="card chart"><h3>Monthly won / lost</h3>${monthly()}</div>`;
   }
 
   function chart(){
@@ -215,6 +213,39 @@
     </svg>
     <div style="display:flex;justify-content:space-between;font-size:12px;color:#9fb3a6;margin-top:6px">
       <span>${fmtDate(pts[0].date)}</span><span>${fmtDate(pts[pts.length-1].date)}</span></div>`;
+  }
+
+  function monthly(){
+    const settled=state.bets.filter(b=>b.status==='won'||b.status==='lost');
+    if(!settled.length) return '<div class="empty-chart">Settle a bet to see your monthly record.</div>';
+    const keys=settled.map(b=>b.date.slice(0,7)).sort();
+    // every month from first to last settled bet (max 12), so gaps show as empty
+    const months=[]; let [y,m]=keys[0].split('-').map(Number); const last=keys[keys.length-1];
+    while(true){const k=`${y}-${String(m).padStart(2,'0')}`;months.push(k);if(k>=last)break;m++;if(m>12){m=1;y++;}}
+    const ms=months.slice(-12);
+    const data=ms.map(k=>{const bs=settled.filter(b=>b.date.startsWith(k));
+      return {k,w:bs.filter(b=>b.status==='won').length,l:bs.filter(b=>b.status==='lost').length,net:bs.reduce((a,b)=>a+pl(b),0)};});
+    const max=Math.max(1,...data.map(d=>d.w+d.l));
+    const W=600,H=260,top=14,base=190,n=data.length,slot=(W-20)/n,bw=Math.min(56,slot*0.6);
+    const h=v=>v/max*(base-top);
+    let bars='';
+    data.forEach((d,i)=>{
+      const cx=10+slot*(i+0.5), x=cx-bw/2, hw=h(d.w), hl=h(d.l);
+      const r=Math.min(6,bw/4);
+      if(d.w) bars+=`<rect x="${x}" y="${base-hw}" width="${bw}" height="${hw}" fill="var(--win)" ${d.l?'':`rx="${r}"`}/>`;
+      if(d.l) bars+=`<rect x="${x}" y="${base-hw-hl}" width="${bw}" height="${hl}" fill="var(--loss)" ${d.w?'':`rx="${r}"`}/>`;
+      if(d.w&&hw>=26) bars+=`<text x="${cx}" y="${base-hw/2+8}" text-anchor="middle" font-size="22" font-weight="700" fill="#fff">${d.w}</text>`;
+      if(d.l&&hl>=26) bars+=`<text x="${cx}" y="${base-hw-hl/2+8}" text-anchor="middle" font-size="22" font-weight="700" fill="#fff">${d.l}</text>`;
+      const lab=new Date(d.k+'-01T00:00').toLocaleDateString('en-GB',{month:'short'});
+      bars+=`<text x="${cx}" y="${base+28}" text-anchor="middle" font-size="21" fill="#9fb3a6">${lab}</text>`;
+      if(d.w+d.l) bars+=`<text x="${cx}" y="${base+56}" text-anchor="middle" font-size="20" font-weight="700" font-family="JetBrains Mono,monospace" fill="${d.net>0.004?'var(--win)':d.net<-0.004?'var(--loss)':'#9fb3a6'}">${d.net>0.004?'+':d.net<-0.004?'−':''}£${Math.abs(d.net).toFixed(0)}</text>`;
+    });
+    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Bets won and lost per month">
+      <line x1="10" x2="${W-10}" y1="${base}" y2="${base}" stroke="rgba(255,255,255,.2)"/>${bars}</svg>
+      <div style="display:flex;gap:16px;font-size:12px;color:#9fb3a6;margin-top:6px">
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--win);margin-right:6px"></span>Won</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--loss);margin-right:6px"></span>Lost</span>
+        <span style="margin-left:auto">£ = month's profit/loss</span></div>`;
   }
 
   function betsView(){
