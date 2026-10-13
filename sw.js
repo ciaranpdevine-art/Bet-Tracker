@@ -1,6 +1,6 @@
 // Minimal service worker: makes the app installable and gives basic offline support.
 // The page is fetched network-first so you always get the latest version when online.
-const CACHE_NAME = 'bet-tracker-v5';
+const CACHE_NAME = 'bet-tracker-v6';
 const APP_SHELL = ['./', './index.html', './manifest.json?v=3', './icon-192.png', './icon-512.png', './cloud.js'];
 
 self.addEventListener('install', (event) => {
