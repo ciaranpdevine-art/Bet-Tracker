@@ -9,6 +9,10 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bet Tracker">
 <title>Bet Tracker</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="cloud.js"></script>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -200,7 +204,46 @@
     return {n:bets.length,settled:st.length,w,l:st.length-w,staked,net,winRate:st.length?w/st.length*100:0,roi:staked?net/staked*100:0};
   }
   const pct=(n,dp=0)=>(n>0.004?'+':n<-0.004?'−':'')+Math.abs(n).toFixed(dp)+'%';
-  function save(){try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}}
+  function save(){try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){} cloudPush();}
+
+  // ---- cloud sync: signed in, the season lives in your account (users/<uid>/bettracker/state) ----
+  let cloudDoc=null, cloudStop=null;
+  const syncFail=()=>window.Cloud&&Cloud.note('Sync problem: changes are saved here and will retry');
+  const pack=s=>({json:JSON.stringify(s),updatedAt:Date.now()});
+  function cloudPush(){ if(cloudDoc) cloudDoc.set(pack(state)).catch(syncFail); }
+  // Union of two lists of {id,...}; the first list wins when both have the same id.
+  const unionById=(a,b)=>{const ids=new Set((a||[]).map(x=>x.id));return [...(a||[]),...(b||[]).filter(x=>x&&!ids.has(x.id))];};
+  if(window.Cloud) Cloud.onUser(async u=>{
+    if(cloudStop){cloudStop();cloudStop=null;} cloudDoc=null;
+    if(!u) return;
+    const d=Cloud.userRef().collection('bettracker').doc('state');
+    try{
+      if(!Cloud.migrated('bettracker')){
+        // First sign-in on this device: combine this device's bets with the account's. Nothing is lost.
+        Cloud.note("Uploading this device's bets…");
+        const snap=await d.get();
+        let merged=state;
+        if(snap.exists){
+          const remote=JSON.parse(snap.data().json||'{}');
+          merged=Object.assign({},state,remote,{
+            bets:unionById(remote.bets,state.bets),
+            categories:unionById(remote.categories,state.categories),
+            betTypes:unionById(remote.betTypes,state.betTypes)});
+        }
+        await d.set(pack(merged));
+        Cloud.markMigrated('bettracker'); Cloud.note('');
+      }
+    }catch(e){Cloud.note("Couldn't reach your account, so bets stay on this device for now. Reload to try again.");return;}
+    if(Cloud.user!==u) return;
+    cloudDoc=d;
+    cloudStop=d.onSnapshot(s=>{
+      if(!s.exists) return;
+      try{state=Object.assign({seasonName:'2026/27 Season',bets:[]},JSON.parse(s.data().json));}catch(e){return;}
+      ensureCats();
+      try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}
+      if(!$('#modal').innerHTML) render(); // don't disturb a bet being edited
+    },syncFail);
+  });
 
   const $=s=>document.querySelector(s);
   const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
