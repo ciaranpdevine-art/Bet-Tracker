@@ -128,6 +128,13 @@
   .srow .sm{font-size:12px;color:#9fb3a6;margin-top:3px;line-height:1.4}
   .srow .sp{font-weight:700;font-size:15px;white-space:nowrap}
   .srow.sub{padding:7px 0 7px 18px}
+  .sgroup{border-bottom:1px solid var(--line)}
+  .sgroup:last-child{border-bottom:0}
+  .sgroup .stog{width:100%;background:none;border:0;border-bottom:0;color:inherit;font:inherit;text-align:left;cursor:pointer}
+  .chev{width:14px;height:14px;color:#9fb3a6;transition:transform .2s;transform:rotate(-90deg)}
+  .sgroup.open .chev{transform:none}
+  .ssub{display:none;border-top:1px solid var(--line)}
+  .sgroup.open .ssub{display:block}
   .srow.sub .sn{font-weight:600;font-size:13px;color:#c7d4cb}
   .srow.sub .sp{font-size:13px}
   .catrow i{flex:none;width:14px;height:14px;border-radius:4px}
@@ -175,6 +182,7 @@
   const CUR='£';
   let state={seasonName:'2026/27 Season',bets:[]};
   let tab='dashboard', filter='all', catFilter='all', query='';
+  let openStats=[]; try{openStats=JSON.parse(localStorage.getItem('bet-tracker-open-stats')||'[]');}catch(e){}
 
   try{const s=localStorage.getItem(KEY); if(s) state=Object.assign(state,JSON.parse(s));}catch(e){}
   const CAT_COLORS=['#e3b341','#4f8fd6','#a77bd6','#2bb5b0','#e08a3c','#d66ba0','#8fa3b8','#c9c26a'];
@@ -289,6 +297,12 @@
       $('#clearQ').onclick=()=>{q.value='';q.oninput();q.focus();};
     }
     document.querySelectorAll('.chip[data-pie]').forEach(c=>c.onclick=()=>{pieMode=c.dataset.pie;render();});
+    document.querySelectorAll('[data-tog]').forEach(btn=>btn.onclick=()=>{
+      const g=btn.parentElement, open=!g.classList.contains('open');
+      g.classList.toggle('open',open); btn.setAttribute('aria-expanded',open);
+      openStats=openStats.filter(id=>id!==btn.dataset.tog); if(open) openStats.push(btn.dataset.tog);
+      try{localStorage.setItem('bet-tracker-open-stats',JSON.stringify(openStats));}catch(e){}
+    });
   }
 
   function dashboard(){
@@ -427,8 +441,12 @@
         sub=groups.map(({t,s})=>`<div class="srow sub"><div><div class="sn">${esc(t.name)}</div><div class="sm">${line(s)}</div></div>
           <div class="sp mono ${cls(s.net)}">${signed(s.net)}</div></div>`).join('');
       }
-      return `<div class="srow"><div><div class="sn"><i style="background:${c.color}"></i>${esc(c.name)}</div><div class="sm">${line(s)}</div></div>
-        <div class="sp mono ${cls(s.net)}">${signed(s.net)}</div></div>${sub}`;
+      const head=`<div><div class="sn"><i style="background:${c.color}"></i>${esc(c.name)}${sub?'<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>':''}</div><div class="sm">${line(s)}</div></div>
+        <div class="sp mono ${cls(s.net)}">${signed(s.net)}</div>`;
+      if(!sub) return `<div class="srow">${head}</div>`;
+      const open=openStats.includes(c.id);
+      return `<div class="sgroup ${open?'open':''}"><button type="button" class="srow stog" data-tog="${c.id}" aria-expanded="${open}">${head}</button>
+        <div class="ssub">${sub}</div></div>`;
     }).join('');
   }
 
