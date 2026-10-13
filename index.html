@@ -41,6 +41,7 @@
   .hero .label{font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:#9fb3a6}
   .hero .big{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:44px;margin:6px 0 2px;line-height:1.05}
   .hero .sub{font-size:14px;color:#c7d4cb}
+  .pendnote{font-style:italic;font-size:13px;color:#9fb3a6;margin-top:6px}
   .up{color:var(--win)} .down{color:var(--loss)} .flat{color:#eef3ee}
   .badge{display:inline-block;margin-top:10px;font-size:12px;font-weight:700;padding:5px 10px;border-radius:999px}
   .badge.up{background:rgba(47,191,113,.15)} .badge.down{background:rgba(229,72,77,.15)} .badge.flat{background:rgba(255,255,255,.08)}
@@ -208,7 +209,8 @@
   // W/L, P/L and ROI for any group of bets
   function summarise(bets){
     const st=bets.filter(b=>b.status==='won'||b.status==='lost');
-    const w=st.filter(b=>b.status==='won').length, staked=st.reduce((a,b)=>a+(+b.stake||0),0), net=st.reduce((a,b)=>a+pl(b),0);
+    const counted=bets.filter(b=>b.status!=='void');
+    const w=st.filter(b=>b.status==='won').length, staked=counted.reduce((a,b)=>a+(+b.stake||0),0), net=counted.reduce((a,b)=>a+pl(b),0);
     return {n:bets.length,settled:st.length,w,l:st.length-w,staked,net,winRate:st.length?w/st.length*100:0,roi:staked?net/staked*100:0};
   }
   const pct=(n,dp=0)=>(n>0.004?'+':n<-0.004?'−':'')+Math.abs(n).toFixed(dp)+'%';
@@ -265,15 +267,16 @@
   // Profit/loss for a single bet
   function pl(b){
     if(b.status==='won') return (+b.returns||0)-(+b.stake||0);
-    if(b.status==='lost') return -(+b.stake||0);
+    if(b.status==='lost'||b.status==='pending') return -(+b.stake||0);
     return 0;
   }
   function stats(){
     const settled=state.bets.filter(b=>b.status==='won'||b.status==='lost');
     const won=settled.filter(b=>b.status==='won');
-    const staked=settled.reduce((a,b)=>a+(+b.stake||0),0);
+    const counted=state.bets.filter(b=>b.status!=='void');
+    const staked=counted.reduce((a,b)=>a+(+b.stake||0),0);
     const returned=won.reduce((a,b)=>a+(+b.returns||0),0);
-    const net=settled.reduce((a,b)=>a+pl(b),0);
+    const net=counted.reduce((a,b)=>a+pl(b),0);
     const pend=state.bets.filter(b=>b.status==='pending');
     const best=won.reduce((m,b)=>Math.max(m,pl(b)),0);
     return {settled,won:won.length,lost:settled.length-won.length,staked,returned,net,
@@ -315,6 +318,7 @@
         <div class="label">Season profit / loss</div>
         <div class="big ${c}">${signed(s.net)}</div>
         <div class="sub">${s.won}W – ${s.lost}L · ${s.settled.length} settled${s.pendingCount?` · ${s.pendingCount} pending`:''}</div>
+        ${s.pendingCount?`<div class="pendnote">Includes ${signed(-s.pendingStake)} pending (counted as lost)</div>`:''}
         <div class="badge ${c}">${word}${s.staked?` · ROI ${s.roi>=0?'+':''}${s.roi.toFixed(1)}%`:''}</div>
       </section>
       <div class="grid">
@@ -333,9 +337,9 @@
   }
 
   function chart(){
-    const pts=state.bets.filter(b=>b.status==='won'||b.status==='lost')
+    const pts=state.bets.filter(b=>b.status!=='void')
       .sort((a,b)=>a.date.localeCompare(b.date)||a.created-b.created);
-    if(pts.length<1) return '<div class="empty-chart">Settle a bet to start the graph.</div>';
+    if(pts.length<1) return '<div class="empty-chart">Log a bet to start the graph.</div>';
     let run=0; const ys=[0,...pts.map(b=>run+=pl(b))];
     const W=600,H=200,P=14;
     const mn=Math.min(0,...ys),mx=Math.max(0,...ys),rng=(mx-mn)||1;
@@ -355,8 +359,8 @@
   }
 
   function monthly(){
-    const settled=state.bets.filter(b=>b.status==='won'||b.status==='lost');
-    if(!settled.length) return '<div class="empty-chart">Settle a bet to see your monthly record.</div>';
+    const settled=state.bets.filter(b=>b.status!=='void');
+    if(!settled.length) return '<div class="empty-chart">Log a bet to see your monthly record.</div>';
     const keys=settled.map(b=>b.date.slice(0,7)).sort();
     // every month from first to last settled bet (max 12), so gaps show as empty
     const months=[]; let [y,m]=keys[0].split('-').map(Number); const last=keys[keys.length-1];
@@ -377,7 +381,7 @@
       if(d.l&&hl>=26) bars+=`<text x="${cx}" y="${base-hw-hl/2+8}" text-anchor="middle" font-size="22" font-weight="700" fill="#fff">${d.l}</text>`;
       const lab=new Date(d.k+'-01T00:00').toLocaleDateString('en-GB',{month:'short'});
       bars+=`<text x="${cx}" y="${base+28}" text-anchor="middle" font-size="21" fill="#9fb3a6">${lab}</text>`;
-      if(d.w+d.l) bars+=`<text x="${cx}" y="${base+56}" text-anchor="middle" font-size="20" font-weight="700" font-family="JetBrains Mono,monospace" fill="${d.net>0.004?'var(--win)':d.net<-0.004?'var(--loss)':'#9fb3a6'}">${d.net>0.004?'+':d.net<-0.004?'−':''}£${Math.abs(d.net).toFixed(0)}</text>`;
+      if(Math.abs(d.net)>0.004||d.w+d.l) bars+=`<text x="${cx}" y="${base+56}" text-anchor="middle" font-size="20" font-weight="700" font-family="JetBrains Mono,monospace" fill="${d.net>0.004?'var(--win)':d.net<-0.004?'var(--loss)':'#9fb3a6'}">${d.net>0.004?'+':d.net<-0.004?'−':''}£${Math.abs(d.net).toFixed(0)}</text>`;
     });
     return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Bets won and lost per month">
       <line x1="10" x2="${W-10}" y1="${base}" y2="${base}" stroke="rgba(255,255,255,.2)"/>${bars}</svg>
