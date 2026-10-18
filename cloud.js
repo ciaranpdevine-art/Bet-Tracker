@@ -39,6 +39,7 @@
     },
     clean,
     note,
+    signOut() { return firebase.auth().signOut(); },
   });
 
   function flag(key) { return 'cloud-migrated:' + key + ':' + (user ? user.uid : ''); }
@@ -68,7 +69,8 @@
     if (!bar) return;
     if (!Cloud.enabled) { bar.hidden = true; return; }
     bar.hidden = false;
-    if (!ready) { bar.innerHTML = '<span class="msg"><span class="dot warn"></span>Connecting…</span>'; return; }
+    // Stay out of the way while connecting, and while signed in with nothing to report
+    if (!ready || (user && !noteText)) { bar.hidden = true; return; }
     if (user) {
       bar.innerHTML = `<span class="msg"><span class="dot ok"></span>${noteText || 'Synced to your account'} · <b></b></span>
         <button type="button" data-a="out">Sign out</button>`;

@@ -41,6 +41,9 @@
   .hero .label{font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:#9fb3a6}
   .hero .big{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:44px;margin:6px 0 2px;line-height:1.05}
   .hero .sub{font-size:14px;color:#c7d4cb}
+  .mlegend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:#c7d4cb;margin-top:8px}
+  .mlegend.sub{color:#9fb3a6;margin-top:6px}
+  .mlegend .strip{display:inline-block;width:14px;height:5px;border-radius:2px;margin-right:6px;vertical-align:2px}
   .pendnote{font-style:italic;font-size:13px;color:#9fb3a6;margin-top:6px}
   .up{color:var(--win)} .down{color:var(--loss)} .flat{color:#eef3ee}
   .badge{display:inline-block;margin-top:10px;font-size:12px;font-weight:700;padding:5px 10px;border-radius:999px}
@@ -141,6 +144,12 @@
   .catrow i{flex:none;width:14px;height:14px;border-radius:4px}
   .catrow input{flex:1;padding:10px 12px;border-radius:10px;border:1px solid #cfc6b2;background:#fffdf7;font-size:16px;font-family:inherit;color:var(--ink)}
   .settings-list .actions .btn{text-align:center}
+  .acct{display:flex;align-items:center;gap:10px;background:#fffdf7;border:1px solid #cfc6b2;border-radius:12px;padding:10px 12px;margin-bottom:14px}
+  .acct .dot{flex:none;width:9px;height:9px;border-radius:50%;background:#2f9e5b}
+  .acct>div{flex:1;min-width:0}
+  .acct .at{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+  .acct .ae{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .settings-list .acct .btn{width:auto;margin:0;padding:8px 12px;text-align:center}
   .settings-list .catrow .btn{width:auto;margin:0;padding:10px 14px;text-align:center}
   .cat{display:inline-flex;align-items:center;gap:5px;font-weight:600;color:#4a463c}
   .cat i{width:8px;height:8px;border-radius:50%;display:inline-block}
@@ -187,7 +196,7 @@
 
   try{const s=localStorage.getItem(KEY); if(s) state=Object.assign(state,JSON.parse(s));}catch(e){}
   const CAT_COLORS=['#e3b341','#4f8fd6','#a77bd6','#2bb5b0','#e08a3c','#d66ba0','#8fa3b8','#c9c26a'];
-  let pieMode='wagered';
+  let pieMode='wagered', barMode='count';
   function ensureCats(){
     if(!Array.isArray(state.categories)||!state.categories.length)
       state.categories=['Bets','LMS','FF','Poker'].map((n,i)=>({id:'c'+i,name:n,color:CAT_COLORS[i]}));
@@ -300,6 +309,7 @@
       $('#clearQ').onclick=()=>{q.value='';q.oninput();q.focus();};
     }
     document.querySelectorAll('.chip[data-pie]').forEach(c=>c.onclick=()=>{pieMode=c.dataset.pie;render();});
+    document.querySelectorAll('.chip[data-bar]').forEach(c=>c.onclick=()=>{barMode=c.dataset.bar;render();});
     document.querySelectorAll('[data-tog]').forEach(btn=>btn.onclick=()=>{
       const g=btn.parentElement, open=!g.classList.contains('open');
       g.classList.toggle('open',open); btn.setAttribute('aria-expanded',open);
@@ -359,36 +369,54 @@
   }
 
   function monthly(){
-    const settled=state.bets.filter(b=>b.status!=='void');
-    if(!settled.length) return '<div class="empty-chart">Log a bet to see your monthly record.</div>';
-    const keys=settled.map(b=>b.date.slice(0,7)).sort();
-    // every month from first to last settled bet (max 12), so gaps show as empty
+    const all=state.bets.filter(b=>b.status!=='void');
+    if(!all.length) return '<div class="empty-chart">Log a bet to see your monthly record.</div>';
+    const keys=all.map(b=>b.date.slice(0,7)).sort();
+    // every month from first to last bet (max 12), so gaps show as empty
     const months=[]; let [y,m]=keys[0].split('-').map(Number); const last=keys[keys.length-1];
     while(true){const k=`${y}-${String(m).padStart(2,'0')}`;months.push(k);if(k>=last)break;m++;if(m>12){m=1;y++;}}
     const ms=months.slice(-12);
-    const data=ms.map(k=>{const bs=settled.filter(b=>b.date.startsWith(k));
-      return {k,w:bs.filter(b=>b.status==='won').length,l:bs.filter(b=>b.status==='lost').length,net:bs.reduce((a,b)=>a+pl(b),0)};});
-    const max=Math.max(1,...data.map(d=>d.w+d.l));
-    const W=600,H=260,top=14,base=190,n=data.length,slot=(W-20)/n,bw=Math.min(56,slot*0.6);
-    const h=v=>v/max*(base-top);
-    let bars='';
-    data.forEach((d,i)=>{
-      const cx=10+slot*(i+0.5), x=cx-bw/2, hw=h(d.w), hl=h(d.l);
-      const r=Math.min(6,bw/4);
-      if(d.w) bars+=`<rect x="${x}" y="${base-hw}" width="${bw}" height="${hw}" fill="var(--win)" ${d.l?'':`rx="${r}"`}/>`;
-      if(d.l) bars+=`<rect x="${x}" y="${base-hw-hl}" width="${bw}" height="${hl}" fill="var(--loss)" ${d.w?'':`rx="${r}"`}/>`;
-      if(d.w&&hw>=26) bars+=`<text x="${cx}" y="${base-hw/2+8}" text-anchor="middle" font-size="22" font-weight="700" fill="#fff">${d.w}</text>`;
-      if(d.l&&hl>=26) bars+=`<text x="${cx}" y="${base-hw-hl/2+8}" text-anchor="middle" font-size="22" font-weight="700" fill="#fff">${d.l}</text>`;
-      const lab=new Date(d.k+'-01T00:00').toLocaleDateString('en-GB',{month:'short'});
-      bars+=`<text x="${cx}" y="${base+28}" text-anchor="middle" font-size="21" fill="#9fb3a6">${lab}</text>`;
-      if(Math.abs(d.net)>0.004||d.w+d.l) bars+=`<text x="${cx}" y="${base+56}" text-anchor="middle" font-size="20" font-weight="700" font-family="JetBrains Mono,monospace" fill="${d.net>0.004?'var(--win)':d.net<-0.004?'var(--loss)':'#9fb3a6'}">${d.net>0.004?'+':d.net<-0.004?'−':''}£${Math.abs(d.net).toFixed(0)}</text>`;
+    const money=barMode==='money';
+    // won side: bets won or profit; lost side: bets lost or stake lost (settled bets only)
+    const val=(b,side)=>side==='won'?(b.status!=='won'?0:money?Math.max(0,pl(b)):1):(b.status!=='lost'?0:money?(+b.stake||0):1);
+    const data=ms.map(k=>{
+      const bs=all.filter(b=>b.date.startsWith(k));
+      const side=sd=>state.categories.map(c=>({c,v:bs.filter(b=>b.cat===c.id).reduce((a,b)=>a+val(b,sd),0)})).filter(x=>x.v>0.004);
+      const won=side('won'), lost=side('lost');
+      return {k,won,lost,wt:won.reduce((a,x)=>a+x.v,0),lt:lost.reduce((a,x)=>a+x.v,0),n:bs.length,net:bs.reduce((a,b)=>a+pl(b),0)};
     });
-    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Bets won and lost per month">
-      <line x1="10" x2="${W-10}" y1="${base}" y2="${base}" stroke="rgba(255,255,255,.2)"/>${bars}</svg>
-      <div style="display:flex;gap:16px;font-size:12px;color:#9fb3a6;margin-top:6px">
-        <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--win);margin-right:6px"></span>Won</span>
-        <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--loss);margin-right:6px"></span>Lost</span>
-        <span style="margin-left:auto">£ = month's profit/loss</span></div>`;
+    const max=Math.max(1,...data.map(d=>Math.max(d.wt,d.lt)));
+    const W=600,H=270,top=30,base=196,n=data.length,slot=(W-20)/n;
+    const bw=Math.min(44,slot*0.34), gap=Math.min(6,slot*0.05);
+    const h=v=>v/max*(base-top);
+    const fmt=v=>money?'£'+Math.round(v):String(v);
+    const used=new Set();
+    let g='';
+    const stack=(parts,x,total)=>{
+      let yy=base, out='';
+      parts.forEach(({c,v})=>{used.add(c.id);const hh=h(v);yy-=hh;
+        out+=`<rect x="${x}" y="${yy}" width="${bw}" height="${hh}" fill="${c.color}" stroke="var(--felt-2)" stroke-width="1.5"/>`;
+        if(!money&&hh>=24&&parts.length>1) out+=`<text x="${x+bw/2}" y="${yy+hh/2+7}" text-anchor="middle" font-size="18" font-weight="700" fill="#10201a">${v}</text>`;
+      });
+      if(total) out+=`<text x="${x+bw/2}" y="${base-h(total)-8}" text-anchor="middle" font-size="${money?15:18}" font-weight="700" fill="#eef3ee">${fmt(total)}</text>`;
+      return out;
+    };
+    data.forEach((d,i)=>{
+      const cx=10+slot*(i+0.5), xw=cx-gap/2-bw, xl=cx+gap/2;
+      g+=stack(d.won,xw,d.wt)+stack(d.lost,xl,d.lt);
+      // green / red strip under each bar marks which side is which
+      g+=`<rect x="${xw}" y="${base+3}" width="${bw}" height="5" rx="2" fill="var(--win)"/><rect x="${xl}" y="${base+3}" width="${bw}" height="5" rx="2" fill="var(--loss)"/>`;
+      const lab=new Date(d.k+'-01T00:00').toLocaleDateString('en-GB',{month:'short'});
+      g+=`<text x="${cx}" y="${base+32}" text-anchor="middle" font-size="20" fill="#9fb3a6">${lab}</text>`;
+      if(d.n) g+=`<text x="${cx}" y="${base+60}" text-anchor="middle" font-size="19" font-weight="700" font-family="JetBrains Mono,monospace" fill="${d.net>0.004?'var(--win)':d.net<-0.004?'var(--loss)':'#9fb3a6'}">${d.net>0.004?'+':d.net<-0.004?'−':''}£${Math.abs(d.net).toFixed(0)}</text>`;
+    });
+    const sw=c=>`<span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${c};margin-right:6px;vertical-align:-1px"></span>`;
+    const cats=state.categories.filter(c=>used.has(c.id));
+    return `<div class="filters" style="margin:0 0 6px">${[['count','No. of bets'],['money','£ amount']].map(([k,l])=>`<button class="chip ${barMode===k?'on':''}" data-bar="${k}">${l}</button>`).join('')}</div>
+      <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${money?'Amount':'Number of bets'} won and lost per month, by category">
+      <line x1="10" x2="${W-10}" y1="${base}" y2="${base}" stroke="rgba(255,255,255,.2)"/>${g}</svg>
+      <div class="mlegend">${cats.map(c=>`<span>${sw(c.color)}${esc(c.name)}</span>`).join('')}</div>
+      <div class="mlegend sub"><span><span class="strip" style="background:var(--win)"></span>Won (left)</span><span><span class="strip" style="background:var(--loss)"></span>Lost (right)</span><span style="margin-left:auto">£ under month = profit/loss</span></div>`;
   }
 
   function pie(){
@@ -629,6 +657,7 @@
   function openSettings(){
     $('#modal').innerHTML=`<div class="overlay" id="ov"><div class="sheet settings-list">
       <h2>Season</h2>
+      ${window.Cloud&&Cloud.user?`<div class="acct"><span class="dot"></span><div><div class="at">Synced to your account</div><div class="ae">${esc(Cloud.user.email||'')}</div></div><button class="btn ghost" id="signOut">Sign out</button></div>`:''}
       <div class="field"><label>Season name</label><input id="s-name" value="${esc(state.seasonName)}"></div>
       <div class="field"><label>Categories</label><div id="catList"></div></div>
       <div class="field"><label>Bet types <span style="text-transform:none;letter-spacing:0;font-weight:500">(shown for ${esc((state.categories.find(c=>c.hasTypes)||{name:'Bets'}).name)})</span></label><div id="typeList"></div></div>
@@ -638,6 +667,7 @@
       <button class="btn danger" id="reset">Start a new season (clear all bets)</button>
       <div class="actions"><button class="btn primary" id="done">Done</button></div>
     </div></div>`;
+    if($('#signOut')) $('#signOut').onclick=()=>{if(confirm('Sign out? Your bets stay in your account and come back when you sign in again.')){Cloud.signOut();close();}};
     const dl=(name,txt,type)=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type}));a.download=name;a.click();};
     $('#exp').onclick=()=>dl('bet-tracker-backup-'+today()+'.json',JSON.stringify(state,null,2),'application/json');
     $('#csv').onclick=()=>{
