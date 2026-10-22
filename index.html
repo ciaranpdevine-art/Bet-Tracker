@@ -229,7 +229,10 @@
   let cloudDoc=null, cloudStop=null;
   const syncFail=()=>window.Cloud&&Cloud.note('Sync problem: changes are saved here and will retry');
   const pack=s=>({json:JSON.stringify(s),updatedAt:Date.now()});
-  function cloudPush(){ if(cloudDoc) cloudDoc.set(pack(state)).catch(syncFail); }
+  // Changes made before sync connects (first moments after opening, or while signed out)
+  // are flagged, and merged into the account when it connects instead of being replaced.
+  const DIRTY_KEY='bet-tracker-unsynced';
+  function cloudPush(){ if(cloudDoc) cloudDoc.set(pack(state)).catch(syncFail); else { try{localStorage.setItem(DIRTY_KEY,'1');}catch(e){} } }
   // Union of two lists of {id,...}; the first list wins when both have the same id.
   const unionById=(a,b)=>{const ids=new Set((a||[]).map(x=>x.id));return [...(a||[]),...(b||[]).filter(x=>x&&!ids.has(x.id))];};
   if(window.Cloud) Cloud.onUser(async u=>{
@@ -237,20 +240,26 @@
     if(!u) return;
     const d=Cloud.userRef().collection('bettracker').doc('state');
     try{
-      if(!Cloud.migrated('bettracker')){
+      let dirty=false; try{ dirty = localStorage.getItem(DIRTY_KEY)==='1'; }catch(e){}
+      if(!Cloud.migrated('bettracker') || dirty){
         // First sign-in on this device: combine this device's bets with the account's. Nothing is lost.
         Cloud.note("Uploading this device's bets…");
         const snap=await d.get();
         let merged=state;
         if(snap.exists){
           const remote=JSON.parse(snap.data().json||'{}');
-          merged=Object.assign({},state,remote,{
-            bets:unionById(remote.bets,state.bets),
-            categories:unionById(remote.categories,state.categories),
-            betTypes:unionById(remote.betTypes,state.betTypes)});
+          // First sign-in: the account's copy wins where both have the same item.
+          // Unsynced changes on this device: this device's copy wins (it's the newer edit).
+          const mine=Cloud.migrated('bettracker') && dirty;
+          const [a,b]=mine?[state,remote]:[remote,state];
+          merged=Object.assign({},b,a,{
+            bets:unionById(a.bets,b.bets),
+            categories:unionById(a.categories,b.categories),
+            betTypes:unionById(a.betTypes,b.betTypes)});
         }
         await d.set(pack(merged));
         Cloud.markMigrated('bettracker'); Cloud.note('');
+        try{ localStorage.removeItem(DIRTY_KEY); }catch(e){}
       }
     }catch(e){Cloud.note("Couldn't reach your account, so bets stay on this device for now. Reload to try again.");return;}
     if(Cloud.user!==u) return;
